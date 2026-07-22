@@ -37,7 +37,8 @@ issues.
 | **Creators** | A large glowing white ⭐ pops into the middle, slides left, and *“Some Amazing Creators”* fades in beside it. |
 | **Developers** | The star gives way to a white verified-style check badge — *“Popular Developers.”* |
 | **Community** | The badge gives way to a white group icon — *“Amazing Community Members.”* |
-| **Spiral** | All icons fly into the centre and orbit. The orbit speeds up, the spiral tightens, the camera zooms and particle count climbs into an elegant magical explosion of sparkles, glitter, stars, tiny glowing hearts and dust. |
+| **Showcase** | The camera pulls back to reveal all three symbols lined up together with their labels (Creators · Developers · Community). It holds, then the labels close in toward the centre. |
+| **Spiral** | The symbols swirl inward from the row and orbit. The orbit speeds up, the spiral tightens, the camera zooms and particle count climbs into an elegant magical explosion of sparkles, glitter, stars, tiny glowing hearts and dust. |
 | **Outro** | The explosion reforms into the big glossy pastel-pink `TTK` logo with soft bloom and floating sparkles. Bottom text fades in: *“Join TTK Community Today — .gg/ttk,”* holds, then fades out. |
 
 ---

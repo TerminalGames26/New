@@ -47,16 +47,18 @@
     commPop: 12.35,
     commSlide: 13.0,
     commText: 13.25,
-    spiralStart: 15.4,
-    spiralCollapse: 16.0,
-    explode: 19.8,
-    outroStart: 20.2,
-    outroReform: 20.35,
-    outroLogoIn: 20.5,
-    outroTextIn: 21.9,
-    holdUntil: 25.3,
-    fadeOut: 25.4,
-    end: 27.4
+    lineupStart: 15.4,   // zoom out, reveal all three symbols in a row
+    lineupSettle: 16.7,  // symbols + labels fully in place
+    lineupHold: 17.7,    // begin closing the text in
+    swirlStart: 18.3,    // symbols swirl inward -> spiral
+    explode: 22.0,
+    outroStart: 22.4,
+    outroReform: 22.55,
+    outroLogoIn: 22.7,
+    outroTextIn: 24.1,
+    holdUntil: 27.4,
+    fadeOut: 27.5,
+    end: 29.5
   };
 
   /* Staggered eased progress helper: 0 before `delay`, eased 0..1 across
@@ -253,15 +255,17 @@
       const md = this.minDim;
       this.sceneIcons = null;
       this.spiralIcons = null;
+      this.lineupLabels = null;
 
       // Ambient floating particle field (density ramps with the action).
-      const ambientAmt = time > T.spiralStart && time < T.outroStart ? 1.6 : 1.0;
+      const ambientAmt = time > T.swirlStart && time < T.outroStart ? 1.6 : 1.0;
       this.particles.emitAmbient(this.W * 1.15 / this.cam.zoom,
         this.H * 1.15 / this.cam.zoom, ambientAmt);
 
       if (time < T.transition) this._intro(time, dt, md);
       else if (time < T.creatorPop) this._transition(time, md);
-      else if (time < T.spiralStart) this._iconScenes(time, md);
+      else if (time < T.lineupStart) this._iconScenes(time, md);
+      else if (time < T.swirlStart) this._lineup(time, dt, md);
       else if (time < T.outroStart) this._spiral(time, dt, md);
       else this._outro(time, dt, md);
     }
@@ -357,7 +361,7 @@
       const defs = [
         { name: 'star', pop: T.creatorPop, slide: T.creatorSlide, out: T.devStart, text: this.texts.creator, textAt: T.creatorText, color: P.gold },
         { name: 'verified', pop: T.devPop, slide: T.devSlide, out: T.commStart, text: this.texts.developer, textAt: T.devText, color: P.blue },
-        { name: 'group', pop: T.commPop, slide: T.commSlide, out: T.spiralStart, text: this.texts.community, textAt: T.commText, color: P.softPink }
+        { name: 'group', pop: T.commPop, slide: T.commSlide, out: T.lineupStart, text: this.texts.community, textAt: T.commText, color: P.softPink }
       ];
 
       for (const d of defs) {
@@ -412,36 +416,83 @@
       }
     }
 
-    /* ---- SPIRAL: icons collapse, orbit, tighten, explode ---- */
+    /* World x positions for the three symbols laid out in a row. */
+    _rowSlots() {
+      const rg = this.W * 0.3;
+      return [
+        { name: 'star', x: -rg, label: 'Creators' },
+        { name: 'verified', x: 0, label: 'Developers' },
+        { name: 'group', x: rg, label: 'Community' }
+      ];
+    }
+
+    /* ---- LINEUP: zoom out, reveal all three symbols in a row with their
+       labels, hold, then "close in" the text before the swirl. ---- */
+    _lineup(time, dt, md) {
+      const size = md * 0.11;
+      this.cam.tZoom = 0.78;              // pull the camera back
+      this.cam.ty = 0;
+      this.bloomStrength = 0.42;
+      this.sceneIcons = [];
+      this.lineupLabels = [];
+      this.texts.community.classList.remove('show');
+
+      const slots = this._rowSlots();
+      // Text "closes in" (fades + slides toward centre) after the hold.
+      const closeP = seg(time, T.lineupHold, T.swirlStart - T.lineupHold, util.easeInOutCubic);
+
+      slots.forEach((s, i) => {
+        const ip = seg(time, T.lineupStart + i * 0.12, 1.2, softBezier); // gentle stagger
+        const x = util.lerp(0, s.x, ip);
+        const alpha = util.clamp(ip * 1.6, 0, 1);
+        const scale = util.lerp(0.3, 1, ip);
+        this.sceneIcons.push({ name: s.name, x: x, y: 0, size: size * scale, alpha: alpha, rot: 0 });
+
+        // Label beneath each symbol; fades in, then closes in with the group.
+        const lblAlpha = util.clamp(ip * 1.6 - 0.3, 0, 1) * (1 - closeP);
+        const lx = util.lerp(x, x * 0.22, closeP);
+        this.lineupLabels.push({ x: lx, y: size * 1.7, text: s.label, alpha: lblAlpha, size: md * 0.042 });
+      });
+
+      // Cues
+      if (this.cue('lineupWhoosh', T.lineupStart)) { this.audio.whoosh(1.0); this.particles.popBurst(0, 0, P.white); }
+      if (this.cue('lineupChime', T.lineupSettle)) this.audio.sparkle();
+      if (this.cue('lineupClose', T.lineupHold)) this.audio.whoosh(0.6);
+    }
+
+    /* ---- SPIRAL: symbols swirl inward, orbit, tighten, explode ---- */
     _spiral(time, dt, md) {
       const size = md * 0.11;
       this.texts.community.classList.remove('show');
 
-      // Camera zooms in through the build-up.
-      const buildP = seg(time, T.spiralStart, T.explode - T.spiralStart, util.easeInCubic);
-      this.cam.tZoom = util.lerp(1.04, 1.4, buildP);
-      this.bloomStrength = util.lerp(0.55, 1.0, buildP);
+      // Camera zooms back in through the build-up (from the pulled-back
+      // lineup framing) as everything swirls into the centre.
+      const buildP = seg(time, T.swirlStart, T.explode - T.swirlStart, util.easeInCubic);
+      this.cam.tZoom = util.lerp(0.78, 1.4, seg(time, T.swirlStart, T.explode - T.swirlStart, util.easeInOutCubic));
+      this.bloomStrength = util.lerp(0.42, 1.0, buildP);
 
       // Kick off the sweep + seed the orbiting particle field once.
-      if (this.cue('spiralSweep', T.spiralStart)) this.audio.sweep(T.explode - T.spiralStart);
-      if (this.cue('spiralSeed', T.spiralStart + 0.05)) this.particles.seedSpiral(0, 0, 120);
+      if (this.cue('spiralSweep', T.swirlStart)) this.audio.sweep(T.explode - T.swirlStart);
+      if (this.cue('spiralSeed', T.swirlStart + 0.05)) this.particles.seedSpiral(0, 0, 120);
 
-      // The three icons fly into the centre and shrink away.
-      if (time < T.spiralCollapse + 0.4) {
-        const starts = [
-          { name: 'star', x: -this.W * 0.2 / this.cam.zoom, y: 0 },
-          { name: 'verified', x: this.W * 0.18 / this.cam.zoom, y: -this.H * 0.12 },
-          { name: 'group', x: this.W * 0.16 / this.cam.zoom, y: this.H * 0.14 }
-        ];
-        const cp = seg(time, T.spiralStart, 0.9, util.easeInOutCubic);
-        this.spiralIcons = starts.map((s, i) => ({
-          name: s.name,
-          x: util.lerp(s.x, 0, cp),
-          y: util.lerp(s.y, 0, cp),
-          size: size * (1 - 0.85 * cp),
-          alpha: 1 - seg(time, T.spiralCollapse, 0.4),
-          rot: cp * TAU * 1.5
-        }));
+      // The three symbols swirl in from their row slots toward the centre.
+      if (time < T.swirlStart + 1.3) {
+        const slots = this._rowSlots();
+        const cp = seg(time, T.swirlStart, 1.0, util.easeInCubic);
+        this.spiralIcons = slots.map((s) => {
+          const r0 = Math.abs(s.x);
+          const a0 = s.x < 0 ? Math.PI : 0;         // start angle from its slot
+          const ang = a0 + cp * TAU * 1.4;          // 1.4 turns inward
+          const rad = r0 * (1 - cp);
+          return {
+            name: s.name,
+            x: Math.cos(ang) * rad,
+            y: Math.sin(ang) * rad,
+            size: size * (1 - 0.8 * cp),
+            alpha: 1 - seg(time, T.swirlStart + 0.7, 0.5),
+            rot: cp * TAU * 1.6
+          };
+        });
       }
 
       // Continuously feed the spiral and tighten it (radius shrinks,
@@ -580,6 +631,23 @@
           ctx.save();
           ctx.translate(d.x, d.y);
           this.icons.draw(d.name, ctx, d.size, d.alpha, d.rot);
+          ctx.restore();
+        }
+      }
+
+      // Lineup labels (drawn in world space so they zoom with the symbols).
+      if (this.lineupLabels) {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const l of this.lineupLabels) {
+          if (l.alpha <= 0.01) continue;
+          ctx.save();
+          ctx.globalAlpha = util.clamp(l.alpha, 0, 1);
+          ctx.font = '800 ' + l.size + 'px "Segoe UI","Poppins","Trebuchet MS",sans-serif';
+          ctx.shadowColor = 'rgba(120,20,70,0.55)';
+          ctx.shadowBlur = l.size * 0.5;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(l.text, l.x, l.y);
           ctx.restore();
         }
       }
