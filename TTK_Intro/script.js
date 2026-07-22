@@ -56,6 +56,7 @@
       this.particles = new TTK.ParticleSystem(1200);
       this.logo = new TTK.Logo();
       this.moon = TTK.Moon;
+      this.moon.load();               // start loading the moon photo now
 
       this.cam = { zoom: 1.05, x: 0, y: 0, tZoom: 1.0, tx: 0, ty: 0, shake: 0 };
 
@@ -66,7 +67,6 @@
       this._cues = {};
       this._last = 0;
 
-      this.stars = [];
       this.shocks = [];      // expanding collision shockwaves on the moon
 
       this.outroText = document.getElementById('outro-text');
@@ -128,23 +128,6 @@
       this.bloom.width = Math.max(2, Math.floor(this.canvas.width * 0.5));
       this.bloom.height = Math.max(2, Math.floor(this.canvas.height * 0.5));
       this.minDim = Math.min(this.W, this.H);
-      this.moon.render(this.W, this.H);         // (re)bake the lunar surface
-      this._makeStars();
-    }
-
-    _makeStars() {
-      this.stars = [];
-      const count = Math.round((this.W * this.H) / 8000);
-      const skyFrac = this.moon.horizonFrac || 0.4;
-      for (let i = 0; i < count; i++) {
-        this.stars.push({
-          x: Math.random(), y: Math.random() * skyFrac * 0.98,
-          r: util.rand(0.4, 1.8),
-          b: util.rand(0.3, 1),
-          ph: Math.random() * TAU,
-          sp: util.rand(0.6, 2.2)
-        });
-      }
     }
 
     cue(id, at) {
@@ -217,17 +200,6 @@
 
       // Gentle camera settle (slow push-in) + drift toward the moon.
       this.cam.tZoom = util.lerp(1.05, 1.0, seg(time, 0, 6, util.easeOutCubic));
-
-      // Steady star sparkles overhead.
-      if (Math.random() < 0.25) {
-        this.particles.spawn({
-          type: 'spark', color: '#ffffff',
-          x: util.rand(-this.W / 2, this.W / 2), y: util.rand(-this.H / 2, this.logoCy - h),
-          vx: util.rand(-4, 4), vy: util.rand(-4, 4),
-          size: util.rand(3, 7), sizeEnd: 1, life: util.rand(1.2, 2.6),
-          twinkle: util.rand(0.5, 1)
-        });
-      }
 
       // ---- letter drops ----
       const oy0 = -(this.H * 0.5 + h + 40) - this.logoCy;   // start above the screen
@@ -304,14 +276,13 @@
       const shakeX = (Math.random() - 0.5) * this.cam.shake * 7;
       const shakeY = (Math.random() - 0.5) * this.cam.shake * 7;
 
-      // --- backdrop: lunar surface + stars (screen space, gentle shake) ---
+      // --- backdrop: the lunar-surface photo (screen space, gentle shake) ---
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       ctx.save();
       ctx.translate(shakeX, shakeY);
       ctx.globalAlpha = util.clamp(this.sceneAlpha, 0, 1);
-      this.moon.draw(ctx);
+      this.moon.draw(ctx, this.W, this.H);
       ctx.globalAlpha = 1;
-      this._drawStars(ctx);
       ctx.restore();
 
       // --- world (camera space): shockwaves, letters, dust ---
@@ -332,23 +303,6 @@
       ctx.restore();
 
       this._bloomPass();
-    }
-
-    _drawStars(ctx) {
-      const a = this.sceneAlpha;
-      if (a <= 0.01) return;
-      const horizon = (this.moon.horizonY ? this.moon.horizonY() : this.H * 0.4) - 3;
-      ctx.fillStyle = '#ffffff';
-      for (const s of this.stars) {
-        const sy = s.y * this.H;
-        if (sy > horizon) continue;                 // keep stars in the sky
-        const tw = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(s.ph + this.time * s.sp));
-        ctx.globalAlpha = a * s.b * tw;
-        ctx.beginPath();
-        ctx.arc(s.x * this.W, sy, s.r, 0, TAU);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
     }
 
     /* Expanding collision shockwaves — flattened rings that ripple out

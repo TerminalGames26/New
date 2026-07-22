@@ -2,12 +2,12 @@
 
 A cinematic **night-sky / moon** intro built with nothing but **HTML, CSS,
 Canvas, JavaScript and the Web Audio API**. No libraries. No GSAP. No
-Three.js. No frameworks. No npm. No build tools. No image or audio assets —
-the moon, the letters and every sound are generated procedurally in code.
-Just open the file and it plays.
+Three.js. No frameworks. No npm. No build tools. The only asset is the
+`moon.png` backdrop photo; the letters and every sound are generated
+procedurally in code. Just open the file and it plays.
 
-> A realistic, procedurally-generated **lunar surface** stretches to the
-> horizon under a starry sky. The three **TTK** letters — brushed silver
+> A photographic **lunar surface** (`moon.png`) stretches to the horizon
+> under a starry sky. The three **TTK** letters — brushed silver
 > metal with a glowing white edge — drop in one at a time and slam into the
 > moon, each landing with a **boom**, a **moon-dust plume** and an
 > **expanding collision shockwave**. It settles into the finished logo with
@@ -48,8 +48,8 @@ TTK_Intro/
 ├── index.html      Page structure, canvas + overlays, script load order
 ├── style.css       Night-sky background, outro text, start/replay/mute UI
 ├── particles.js    Shared math/easing utils + particle engine (moon dust)
-├── icons.js        Procedural realistic moon (heightfield + baked lighting
-│                   + perspective ground-plane render)
+├── icons.js        Moon backdrop (loads + cover-fits moon.png)
+├── moon.png        Photographic lunar-surface backdrop
 ├── logo.js         Programmatic silver-metal 3D bubble letters (glowing edge)
 ├── audio.js        Fully procedural sound + night-sky background music
 ├── script.js       Main orchestrator: timeline, drops, shockwaves, render
@@ -63,21 +63,13 @@ global `TTK` namespace and the shared math/easing helpers (`TTK.util`).
 
 ## 🔧 How it works
 
-### The realistic moon (`icons.js`)
-No image is used. The surface is built entirely from maths:
-
-1. A tiling **heightfield** is generated from fractal value-noise, then
-   hundreds of **craters** (each a depressed bowl with a raised rim) and
-   dark **maria** are carved into it.
-2. Real **diffuse lighting** is baked into a grayscale surface map using the
-   heightfield normals and a low sun angle (long, dramatic shadows).
-3. The surface is drawn with a **perspective ground-plane renderer**
-   (floor-casting): every screen pixel below the horizon is projected back
-   onto the plane, bilinear-sampled from the baked texture and faded with
-   **aerial haze** toward the horizon.
-
-The whole surface is baked once into an offscreen bitmap (re-baked only on
-resize), so the per-frame cost is a single `drawImage`.
+### The moon (`icons.js`)
+The backdrop is the supplied photographic lunar-surface image (`moon.png`),
+loaded once and drawn **cover-fit** (fills the viewport, centred, no
+distortion) behind the scene. The photo already contains the sky, stars,
+horizon and distant Earth, so the letters simply drop and land on the
+foreground surface. `horizonY()` / `surfaceY()` expose the screen fractions
+the scene director uses to place the landing height.
 
 ### The letters (`logo.js`)
 Not text. Each letter is thick round-capped stroke segments rendered in
