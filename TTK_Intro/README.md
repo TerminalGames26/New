@@ -93,10 +93,18 @@ points to dissolve the logo into glitter and to reform it in the outro.
 
 ### Audio
 Every sound is generated at runtime with oscillators, filtered noise and
-gain envelopes — **no audio files**: soft whoosh, sparkle, magic chime,
-soft pop, glitter, ascending sweep, magical explosion and a final shimmer,
-plus a quiet evolving ambient pad bed. Cues are fired from the timeline so
-sound and visuals stay in sync.
+gain envelopes — **no audio files** — and routed through a procedural
+convolution reverb for a polished, spacious feel:
+
+- **SFX:** soft whoosh, sparkle, bell chime, soft pop, glitter, ascending
+  sweep, a redesigned magical explosion (sub impact + glassy shatter +
+  swelling add9 bell bloom + descending glitter cascade) and a final
+  shimmer. Cues fire from the timeline so sound and visuals stay in sync.
+- **Background music:** a looping dreamy chord progression (I–V–vi–IV in C)
+  synthesised live — soft detuned pad, sub bass, a sparkling arpeggio, bell
+  accents and a gentle pulse. A scheduler queues notes ahead of the audio
+  clock, and the score's intensity is driven by the timeline so it swells
+  into the spiral/explosion and eases back for the outro.
 
 ---
 

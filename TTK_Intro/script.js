@@ -201,7 +201,7 @@
       if (this.started) return;
       this.started = true;
       this.audio.init();
-      this.audio.startPad();
+      this.audio.startMusic();
       this.startOverlay.classList.add('hidden');
       this.time = 0;
       this._cues = {};
@@ -220,7 +220,7 @@
       this.outroText.classList.remove('show');
       for (const k in this.texts) this.texts[k].classList.remove('show');
       this.replayBtn.classList.remove('show');
-      this.audio.startPad();
+      this.audio.startMusic();
       this._last = performance.now();
     }
 
@@ -261,6 +261,16 @@
       const ambientAmt = time > T.swirlStart && time < T.outroStart ? 1.6 : 1.0;
       this.particles.emitAmbient(this.W * 1.15 / this.cam.zoom,
         this.H * 1.15 / this.cam.zoom, ambientAmt);
+
+      // Drive the background-music intensity from the timeline so the score
+      // swells into the spiral / explosion and eases back for the outro.
+      let musicInten = 0.34;
+      if (time >= T.creatorPop && time < T.lineupStart) musicInten = 0.42;
+      else if (time >= T.lineupStart && time < T.swirlStart) musicInten = 0.5;
+      else if (time >= T.swirlStart && time < T.explode) {
+        musicInten = 0.5 + 0.5 * seg(time, T.swirlStart, T.explode - T.swirlStart, util.easeInCubic);
+      } else if (time >= T.explode) musicInten = 0.6;
+      this.audio.setMusicIntensity(musicInten);
 
       if (time < T.transition) this._intro(time, dt, md);
       else if (time < T.creatorPop) this._transition(time, md);
@@ -606,7 +616,7 @@
       // Final shimmer + background fade at the very end.
       if (this.cue('finalShimmer', T.fadeOut)) this.audio.shimmer(1.8);
       if (this.cue('bgFade', T.fadeOut + 0.1)) this.bg.classList.remove('show');
-      if (this.cue('padStop', T.fadeOut)) this.audio.stopPad(2.0);
+      if (this.cue('padStop', T.fadeOut)) this.audio.stopMusic(2.0);
 
       // End: reveal the replay button.
       if (this.cue('end', T.end)) {
