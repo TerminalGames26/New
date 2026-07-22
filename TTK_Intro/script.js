@@ -111,8 +111,56 @@
       this.replayBtn = document.getElementById('replay');
       this.muteBtn = document.getElementById('mute');
 
+      this._initCaptions();
       this._bindEvents();
       this.resize();
+    }
+
+    /* Split every caption into per-letter spans so the letters can fly out
+       of the symbol and gently float. Structure per glyph:
+         <span class="char"><span class="glyph">A</span></span>
+       - .char  handles the continuous floating bob (CSS animation)
+       - .glyph handles the entrance (fly-out from the symbol, CSS transition)
+       Mode 'symbol' makes letters emerge from the left (where the icon is);
+       mode 'up' makes them rise from below (outro). */
+    _splitText(el, mode) {
+      const lines = el.querySelectorAll('.line, .join, .gg');
+      lines.forEach((line) => {
+        const text = line.textContent;
+        line.textContent = '';
+        let idx = 0;
+        for (const ch of text) {
+          const char = document.createElement('span');
+          char.className = 'char';
+          const glyph = document.createElement('span');
+          glyph.className = 'glyph';
+          if (ch === ' ') {
+            char.classList.add('space');
+            glyph.innerHTML = '&nbsp;';
+          } else {
+            glyph.textContent = ch;
+          }
+          // Entrance offset: emerge from the symbol (left) or from below.
+          const dx = mode === 'up' ? util.rand(-14, 14) : -(70 + idx * 13);
+          const dy = mode === 'up' ? 28 : (idx % 2 ? 12 : -9);
+          glyph.style.setProperty('--dx', dx.toFixed(1) + 'px');
+          glyph.style.setProperty('--dy', dy.toFixed(1) + 'px');
+          glyph.style.setProperty('--d', (idx * 0.038).toFixed(3) + 's');
+          // Idle float
+          char.style.setProperty('--fy', (-(4 + (idx % 3) * 2)).toFixed(0) + 'px');
+          char.style.setProperty('--fd', (idx * 0.13).toFixed(2) + 's');
+          char.appendChild(glyph);
+          line.appendChild(char);
+          idx++;
+        }
+      });
+    }
+
+    _initCaptions() {
+      this._splitText(this.texts.creator, 'symbol');
+      this._splitText(this.texts.developer, 'symbol');
+      this._splitText(this.texts.community, 'symbol');
+      this._splitText(this.outroText, 'up');
     }
 
     _bindEvents() {
@@ -203,7 +251,7 @@
     updateScene(dt) {
       const time = this.time;
       const md = this.minDim;
-      this.iconDraw = null;
+      this.sceneIcons = null;
       this.spiralIcons = null;
 
       // Ambient floating particle field (density ramps with the action).
@@ -229,7 +277,7 @@
       if (time < 0.2) this.cam.zoom = 0.8;
 
       // Bloom rises as the logo assembles.
-      this.bloomStrength = util.lerp(0.25, 0.85, seg(time, 0, 2.4, util.easeOutCubic));
+      this.bloomStrength = util.lerp(0.22, 0.68, seg(time, 0, 2.4, util.easeOutCubic));
 
       // Per-letter slide-in from three directions with a slight stagger.
       const dirs = [
@@ -294,43 +342,71 @@
       }
     }
 
-    /* ---- ICON SCENES: creator / developer / community ---- */
+    /* ---- ICON SCENES: creator / developer / community ----
+       Every symbol computes its own state each frame (so two can overlap
+       and cross-fade), and every motion uses long, soft easing — no
+       overshoot, no snap. When a symbol settles its caption's letters fly
+       out of it and gently float. */
     _iconScenes(time, md) {
-      const size = md * 0.11;
+      const size = md * 0.12;
       const leftX = -this.W * 0.2 / this.cam.zoom;
       this.cam.tZoom = 1.04;
       this.bloomStrength = 0.55;
+      this.sceneIcons = [];
 
-      // Helper to compute a pop + slide-left descriptor for one icon.
-      const iconLife = (popAt, slideAt, endAt, name, textEl, textAt, color) => {
-        // pop-in scale (easeOutBack), then slide from centre to the left.
-        const popP = seg(time, popAt, 0.55, util.easeOutBack);
-        const slideP = seg(time, slideAt, 1.0, util.easeInOutCubic);
-        const outP = seg(time, endAt, 0.4, util.easeInCubic);
-        const alpha = util.clamp(popP, 0, 1) * (1 - outP);
-        const x = util.lerp(0, leftX, slideP);
-        const scale = util.lerp(0.2, 1, popP) * (1 - 0.15 * outP);
-        this.iconDraw = { name: name, x: x, y: 0, size: size * scale, alpha: alpha, rot: 0 };
+      const defs = [
+        { name: 'star', pop: T.creatorPop, slide: T.creatorSlide, out: T.devStart, text: this.texts.creator, textAt: T.creatorText, color: P.gold },
+        { name: 'verified', pop: T.devPop, slide: T.devSlide, out: T.commStart, text: this.texts.developer, textAt: T.devText, color: P.softPink },
+        { name: 'group', pop: T.commPop, slide: T.commSlide, out: T.spiralStart, text: this.texts.community, textAt: T.commText, color: P.softPink }
+      ];
 
-        // Cue: pop sound + burst
-        if (this.cue(name + 'Pop', popAt)) { this.audio.pop(); this.particles.popBurst(0, 0, color); }
-        if (this.cue(name + 'Slide', slideAt)) this.audio.sparkle();
-        // Text fades in beside the icon (to the right).
-        if (textEl) {
-          if (this.time >= textAt && this.time < endAt) textEl.classList.add('show');
-          else textEl.classList.remove('show');
-          if (this.cue(name + 'Text', textAt)) { this.audio.sparkle(); this.audio.glitter(); }
+      for (const d of defs) {
+        // Outside this symbol's visible window? make sure its text is hidden.
+        if (time < d.pop - 0.05 || time > d.out + 0.7) {
+          if (d.text) d.text.classList.remove('show');
+          continue;
         }
-      };
+        // Soft pop-in (no overshoot), leisurely slide-left, soft fade-out.
+        const popP = seg(time, d.pop, 0.8, softBezier);
+        const slideP = seg(time, d.slide, 1.3, util.easeInOutCubic);
+        const outP = seg(time, d.out, 0.65, util.easeInOutCubic);
+        const alpha = util.clamp(popP, 0, 1) * (1 - outP);
+        if (alpha > 0.002) {
+          const x = util.lerp(0, leftX, slideP);
+          const y = util.lerp(-size * 0.12, 0, popP);
+          const scale = util.lerp(0.5, 1, popP) * (1 - 0.1 * outP);
+          this.sceneIcons.push({ name: d.name, x: x, y: y, size: size * scale, alpha: alpha, rot: 0 });
+        }
 
-      if (time < T.devStart) {
-        iconLife(T.creatorPop, T.creatorSlide, T.devStart, 'star', this.texts.creator, T.creatorText, P.gold);
-      } else if (time < T.commStart) {
-        this.texts.creator.classList.remove('show');
-        iconLife(T.devPop, T.devSlide, T.commStart, 'verified', this.texts.developer, T.devText, P.softPink);
-      } else {
-        this.texts.developer.classList.remove('show');
-        iconLife(T.commPop, T.commSlide, T.spiralStart, 'group', this.texts.community, T.commText, P.softPink);
+        // Cues
+        if (this.cue(d.name + 'Pop', d.pop)) { this.audio.pop(); this.particles.popBurst(0, 0, d.color); }
+        if (this.cue(d.name + 'Slide', d.slide)) this.audio.sparkle();
+
+        // Caption: reveal while the symbol is settled (letters fly out of it).
+        if (d.text) {
+          if (time >= d.textAt && time < d.out) d.text.classList.add('show');
+          else d.text.classList.remove('show');
+          if (this.cue(d.name + 'Text', d.textAt)) {
+            this.audio.sparkle(); this.audio.glitter();
+            const ix = util.lerp(0, leftX, seg(d.textAt, d.slide, 1.3, util.easeInOutCubic));
+            this._emitFromIcon(ix, 0);   // sparkles stream out toward the text
+          }
+        }
+      }
+    }
+
+    /* A stream of sparkles bursting out of the symbol toward the caption. */
+    _emitFromIcon(x, y) {
+      for (let i = 0; i < 16; i++) {
+        this.particles.spawn({
+          type: util.pick(['spark', 'glitter', 'glow']),
+          color: util.pick([P.white, P.softPink, P.gold]),
+          x: x, y: y,
+          vx: util.rand(60, 320), vy: util.rand(-90, 90),
+          size: util.rand(5, 12), sizeEnd: 0,
+          life: util.rand(0.5, 1.0), drag: 0.85,
+          vr: util.rand(-5, 5), trail: true, fadeOut: 0.6
+        });
       }
     }
 
@@ -495,13 +571,15 @@
       // Particles (behind logo/icons for depth), then icons, then logo.
       this.particles.render(ctx);
 
-      // Scene icons.
-      if (this.iconDraw && this.iconDraw.alpha > 0.002) {
-        const d = this.iconDraw;
-        ctx.save();
-        ctx.translate(d.x, d.y);
-        this.icons.draw(d.name, ctx, d.size, d.alpha, d.rot);
-        ctx.restore();
+      // Scene icons (a list, so symbols can cross-fade).
+      if (this.sceneIcons) {
+        for (const d of this.sceneIcons) {
+          if (d.alpha <= 0.002) continue;
+          ctx.save();
+          ctx.translate(d.x, d.y);
+          this.icons.draw(d.name, ctx, d.size, d.alpha, d.rot);
+          ctx.restore();
+        }
       }
       if (this.spiralIcons) {
         for (const d of this.spiralIcons) {
@@ -577,7 +655,7 @@
       const ctx = this.ctx;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = util.clamp(this.bloomStrength * 0.85, 0, 1);
+      ctx.globalAlpha = util.clamp(this.bloomStrength * 0.62, 0, 1);
       ctx.drawImage(this.bloom, 0, 0, this.canvas.width, this.canvas.height);
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';

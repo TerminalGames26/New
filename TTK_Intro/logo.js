@@ -45,14 +45,22 @@ window.TTK = window.TTK || {};
     ]
   };
 
+  /* Small colour-mix helper for the 3D extrusion shading. */
+  function mix(a, b, t) {
+    const A = util.hexRgb(a), B = util.hexRgb(b);
+    return 'rgb(' + ((A.r + (B.r - A.r) * t) | 0) + ',' +
+      ((A.g + (B.g - A.g) * t) | 0) + ',' + ((A.b + (B.b - A.b) * t) | 0) + ')';
+  }
+
   class Logo {
     constructor() {
-      // Layout: three letters T T K, spaced along x.
+      // Layout: three letters T T K, spaced along x (wider spacing so the
+      // glossy bubbles breathe and never look cramped/overlapping).
       // Base positions are relative to the logo centre (unit = letter height).
       this.letters = [
-        { type: 'T', baseX: -1.02, tilt: 0.16 }, // first T leans slightly right
+        { type: 'T', baseX: -1.18, tilt: 0.15 }, // first T leans slightly right
         { type: 'T', baseX: 0.0, tilt: 0.0 },
-        { type: 'K', baseX: 1.0, tilt: 0.0 }
+        { type: 'K', baseX: 1.16, tilt: 0.0 }
       ];
       // Per-letter animation state (offset in px, scale, alpha, extra tilt).
       this.state = this.letters.map(() => ({
@@ -71,27 +79,31 @@ window.TTK = window.TTK || {};
       return { x: cx + L.baseX * h + s.ox, y: cy + s.oy };
     }
 
-    /* Draw a single bubble letter centred at (0,0) via layered strokes.
-       Assumes the caller has already translated / scaled / rotated. */
+    /* Draw a single glossy 3D bubble letter centred at (0,0).
+       The bubble body is built from thick round-capped strokes; real
+       depth comes from an extrusion pass (many offset copies shaded from
+       dark-back to lighter-side) with the bright gradient front face and
+       specular highlights layered on top. */
     _drawLetter(ctx, type, h, alpha) {
       const segs = GEOMETRY[type];
-      const W = h * 0.28;            // stroke thickness (bubble width)
+      const W = h * 0.27;            // stroke thickness (bubble width)
       const grad = ctx.createLinearGradient(0, -h * 0.5, 0, h * 0.5);
-      grad.addColorStop(0, '#ffe6f5');
-      grad.addColorStop(0.35, P.pink);
-      grad.addColorStop(0.75, P.hotPink);
-      grad.addColorStop(1, P.deepPink);
+      grad.addColorStop(0, '#fff2fa');
+      grad.addColorStop(0.32, '#ffe0f2');
+      grad.addColorStop(0.6, P.pink);
+      grad.addColorStop(0.82, P.hotPink);
+      grad.addColorStop(1, '#ff4fa8');
 
-      const stroke = (segScale, offx, offy, style, width, cap) => {
-        ctx.lineCap = cap || 'round';
+      const stroke = (offx, offy, style, width) => {
+        ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.strokeStyle = style;
         ctx.lineWidth = width;
         for (const seg of segs) {
           ctx.beginPath();
           for (let i = 0; i < seg.length; i++) {
-            const x = seg[i][0] * h * segScale + offx;
-            const y = seg[i][1] * h * segScale + offy;
+            const x = seg[i][0] * h + offx;
+            const y = seg[i][1] * h + offy;
             i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
           }
           ctx.stroke();
@@ -105,32 +117,48 @@ window.TTK = window.TTK || {};
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.shadowColor = util.rgba(P.hotPink, 0.9);
-      ctx.shadowBlur = W * 1.4;
-      stroke(1, 0, 0, util.rgba(P.pink, 0.5), W * 1.05);
+      ctx.shadowBlur = W * 1.3;
+      stroke(0, 0, util.rgba(P.pink, 0.5), W * 1.05);
       ctx.restore();
 
-      // 2. Dark base (depth) — offset downward
-      stroke(1, 0, W * 0.16, util.rgba('#c23f86', 0.9), W);
-
-      // 3. Gradient body
-      stroke(1, 0, 0, grad, W);
-
-      // 4. Inner specular streak (upper-left)
+      // 2. Contact shadow (grounds the letter)
       ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      stroke(1, -W * 0.08, -W * 0.16, util.rgba('#ffffff', 0.4), W * 0.42);
+      ctx.shadowColor = 'rgba(120,20,70,0.45)';
+      ctx.shadowBlur = W * 0.9;
+      ctx.shadowOffsetY = W * 0.5;
+      stroke(0, W * 0.15, 'rgba(120,20,70,0.5)', W);
       ctx.restore();
 
-      // 5. Top rim highlight (the glossy shine line)
+      // 3. 3D extrusion (back -> front) — down-right direction.
+      const depth = W * 0.52, steps = 12;
+      const ex = 0.30, ey = 1.0; // extrusion direction (unnormalised)
+      const en = Math.hypot(ex, ey);
+      for (let i = steps; i >= 1; i--) {
+        const f = i / steps;
+        const mag = depth * f;
+        const col = mix('#6f2049', '#d24f92', 1 - f);
+        stroke((ex / en) * mag, (ey / en) * mag, col, W);
+      }
+
+      // 4. Gradient front face
+      stroke(0, 0, grad, W);
+
+      // 5. Inner specular streak (upper-left)
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      stroke(1, -W * 0.02, -W * 0.28, util.rgba('#ffffff', 0.85), W * 0.12);
+      stroke(-W * 0.08, -W * 0.18, util.rgba('#ffffff', 0.45), W * 0.4);
       ctx.restore();
 
-      // 6. Bottom reflection
+      // 6. Top rim highlight (the glossy shine line)
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      stroke(1, 0, W * 0.3, util.rgba('#ffd9ef', 0.3), W * 0.3);
+      stroke(-W * 0.02, -W * 0.3, util.rgba('#ffffff', 0.9), W * 0.11);
+      ctx.restore();
+
+      // 7. Bottom reflection
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      stroke(0, W * 0.3, util.rgba('#ffd9ef', 0.28), W * 0.28);
       ctx.restore();
 
       ctx.restore();

@@ -65,26 +65,17 @@ html, body {
   pointer-events: none;
 }
 
+/* The caption is a fixed positioned wrapper; all reveal animation lives
+   on the individual letters (.char / .glyph) so they can fly out of the
+   symbol and float independently. */
 .scene-text {
   position: absolute;
   top: 50%;
   left: 58%;
-  transform: translate(-10px, -50%) scale(0.96);
-  opacity: 0;
-  filter: blur(6px);
-  transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translateY(-50%);
   text-align: left;
-  line-height: 1.02;
+  line-height: 1.06;
 }
-.scene-text.show {
-  opacity: 1;
-  filter: blur(0);
-  transform: translate(0, -50%) scale(1);
-}
-
 .scene-text .line {
   display: block;
   font-weight: 800;
@@ -96,34 +87,16 @@ html, body {
     0 0 40px rgba(255, 95, 176, 0.5),
     0 3px 10px rgba(120, 20, 70, 0.4);
 }
-.scene-text .accent {
-  background: linear-gradient(180deg, #ffffff 0%, #ffd9ef 55%, #ff8fd0 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 22px rgba(255, 143, 208, 0.7));
-}
 
 /* ---- Outro bottom text ---- */
 #outro-text {
   position: fixed;
   left: 50%;
   bottom: 12%;
-  transform: translate(-50%, 20px);
+  transform: translateX(-50%);
   z-index: 4;
   text-align: center;
-  opacity: 0;
-  filter: blur(6px);
-  transition:
-    opacity 1s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 1.1s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 1s cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
-}
-#outro-text.show {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  filter: blur(0);
 }
 #outro-text .join {
   font-size: clamp(1.1rem, 3.4vw, 2.2rem);
@@ -137,11 +110,60 @@ html, body {
   font-size: clamp(1.4rem, 4.6vw, 3rem);
   font-weight: 900;
   letter-spacing: 2px;
+}
+
+/* ---- Per-letter fly-out + float (shared by captions & outro) ---- */
+.scene-text .char, #outro-text .char {
+  display: inline-block;
+  animation: floatChar 3.4s ease-in-out infinite;
+  animation-delay: var(--fd, 0s);
+  will-change: transform;
+}
+.scene-text .glyph, #outro-text .glyph {
+  display: inline-block;
+  opacity: 0;
+  transform: translate(var(--dx, -60px), var(--dy, 10px)) scale(0.3);
+  filter: blur(6px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0s),
+    transform 1s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0s),
+    filter 0.7s ease var(--d, 0s);
+  will-change: transform, opacity, filter;
+}
+.scene-text.show .glyph, #outro-text.show .glyph {
+  opacity: 1;
+  transform: translate(0, 0) scale(1);
+  filter: blur(0);
+}
+/* On exit the letters leave together (no reverse-stagger), smoothly. */
+.scene-text:not(.show) .glyph, #outro-text:not(.show) .glyph {
+  transition-delay: 0s;
+  transition-duration: 0.45s, 0.55s, 0.45s;
+}
+
+/* Accent (gradient) letters — clip gradient per glyph + soft glow. */
+.scene-text .accent .glyph {
+  background: linear-gradient(180deg, #ffffff 0%, #ffd9ef 55%, #ff8fd0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.scene-text.show .accent .glyph {
+  filter: blur(0) drop-shadow(0 0 18px rgba(255, 143, 208, 0.75));
+}
+#outro-text .gg .glyph {
   background: linear-gradient(180deg, #ffffff 0%, #ffd9ef 60%, #ff7ec2 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 22px rgba(255, 126, 194, 0.85));
+}
+#outro-text.show .gg .glyph {
+  filter: blur(0) drop-shadow(0 0 20px rgba(255, 126, 194, 0.85));
+}
+
+@keyframes floatChar {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(var(--fy, -5px)); }
 }
 
 /* ---- Buttons ---- */
@@ -254,5 +276,5 @@ button {
 
 /* Respect users who prefer reduced motion for the idle UI animations. */
 @media (prefers-reduced-motion: reduce) {
-  .start-logo, #start-btn { animation: none; }
+  .start-logo, #start-btn, .scene-text .char, #outro-text .char { animation: none; }
 }
