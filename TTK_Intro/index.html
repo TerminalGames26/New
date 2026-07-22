@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>TTK Intro</title>
+  <meta name="description" content="TTK — a soft, glossy, magical intro animation." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Soft pink gradient background layer (fades in during the transition) -->
+  <div id="bg"></div>
+
+  <!-- Subtle vignette for depth -->
+  <div id="vignette"></div>
+
+  <!-- Main render surface (transparent; logo + icons + particles) -->
+  <canvas id="stage"></canvas>
+
+  <!-- Scene captions (HTML text, fade in beside each icon) -->
+  <div id="scene-texts">
+    <div class="scene-text" id="text-creator">
+      <span class="line">Some Amazing</span>
+      <span class="line accent">Creators</span>
+    </div>
+    <div class="scene-text" id="text-developer">
+      <span class="line">Popular</span>
+      <span class="line accent">Developers</span>
+    </div>
+    <div class="scene-text" id="text-community">
+      <span class="line">Amazing Community</span>
+      <span class="line accent">Members</span>
+    </div>
+  </div>
+
+  <!-- Outro bottom text -->
+  <div id="outro-text">
+    <div class="join">Join TTK Community Today</div>
+    <div class="gg">.gg/ttk</div>
+  </div>
+
+  <!-- Mute toggle -->
+  <button id="mute" title="Toggle sound">🔊</button>
+
+  <!-- Replay button (revealed at the end) -->
+  <button id="replay">Replay ✨</button>
+
+  <!-- Start overlay (needed to unlock Web Audio on first gesture) -->
+  <div id="start-overlay">
+    <div class="start-inner">
+      <div class="start-logo">TTK</div>
+      <p class="start-sub">A soft &amp; magical intro</p>
+      <button id="start-btn">Tap to Enter ✨</button>
+    </div>
+  </div>
+
+  <!-- Scripts (load order matters: particles defines shared utils first) -->
+  <script src="particles.js"></script>
+  <script src="icons.js"></script>
+  <script src="logo.js"></script>
+  <script src="audio.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
