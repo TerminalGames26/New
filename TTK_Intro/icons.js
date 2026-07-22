@@ -203,37 +203,36 @@ window.TTK = window.TTK || {};
 
       const s = size * 0.62;
 
-      // Extrude all three silhouettes together for a unified 3D body.
-      const buildAll = (c) => {
-        this._personPath(c, -size * 0.62, -size * 0.05, s * 0.8);
-        this._personPath(c, size * 0.62, -size * 0.05, s * 0.8);
-        this._personPath(c, 0, size * 0.12, s);
-      };
-      this._extrude(ctx, buildAll, size * 0.3, 10, '#b53a7e', '#ff9ed6');
+      // Each of the three people is its own fully-3D object: extruded body
+      // + glossy front face + rim, drawn back-to-front (painter's order) so
+      // the whole group reads as three solid 3D figures, not flat cut-outs.
+      const persons = [
+        { cx: -size * 0.6, cy: -size * 0.02, sc: s * 0.82, top: '#ffe4f4', bot: '#ffb2e0' },
+        { cx: size * 0.6, cy: -size * 0.02, sc: s * 0.82, top: '#ffe4f4', bot: '#ffb2e0' },
+        { cx: 0, cy: size * 0.14, sc: s, top: '#ffffff', bot: '#ffd2ec' }
+      ];
 
-      // back two people (front faces)
-      const back = ctx.createLinearGradient(0, -size, 0, size);
-      back.addColorStop(0, '#ffe9f6');
-      back.addColorStop(1, '#ffbfe4');
-      ctx.fillStyle = back;
-      this._personPath(ctx, -size * 0.62, -size * 0.05, s * 0.8); ctx.fill();
-      this._personPath(ctx, size * 0.62, -size * 0.05, s * 0.8); ctx.fill();
+      for (const pr of persons) {
+        const build = (c) => this._personPath(c, pr.cx, pr.cy, pr.sc);
+        // 3D extrusion for this figure
+        this._extrude(ctx, build, size * 0.26, 10, '#b53a7e', '#ff9ed6');
+        // glossy front face
+        build(ctx);
+        const g = ctx.createLinearGradient(0, pr.cy - pr.sc, 0, pr.cy + pr.sc);
+        g.addColorStop(0, pr.top);
+        g.addColorStop(1, pr.bot);
+        ctx.fillStyle = g;
+        ctx.fill();
+        // rim light
+        ctx.lineWidth = size * 0.02;
+        ctx.strokeStyle = util.rgba('#ffffff', 0.5 * alpha);
+        ctx.stroke();
+      }
 
-      // front centre person (bright glossy)
-      const front = ctx.createLinearGradient(0, -size, 0, size);
-      front.addColorStop(0, '#ffffff');
-      front.addColorStop(0.6, '#fff2fa');
-      front.addColorStop(1, '#ffd2ec');
-      ctx.fillStyle = front;
-      this._personPath(ctx, 0, size * 0.12, s); ctx.fill();
-
-      // rim + specular on the front figure
-      ctx.lineWidth = size * 0.025;
-      ctx.strokeStyle = util.rgba('#ffffff', 0.7 * alpha);
-      this._personPath(ctx, 0, size * 0.12, s); ctx.stroke();
+      // specular highlight on the front figure's head
       ctx.fillStyle = util.rgba('#ffffff', 0.7 * alpha);
       ctx.beginPath();
-      ctx.ellipse(-size * 0.14, -size * 0.42, size * 0.16, size * 0.09, -0.5, 0, TAU);
+      ctx.ellipse(-size * 0.14, -size * 0.44, size * 0.16, size * 0.09, -0.5, 0, TAU);
       ctx.fill();
       ctx.restore();
     },

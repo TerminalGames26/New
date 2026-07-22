@@ -257,8 +257,11 @@
       this.spiralIcons = null;
       this.lineupLabels = null;
 
-      // Ambient floating particle field (density ramps with the action).
-      const ambientAmt = time > T.swirlStart && time < T.outroStart ? 1.6 : 1.0;
+      // Ambient floating particle field (density ramps with the action;
+      // the intro is intentionally calmer so the logo reads clearly).
+      let ambientAmt = 1.0;
+      if (time < T.transition) ambientAmt = 0.5;
+      else if (time > T.swirlStart && time < T.outroStart) ambientAmt = 1.6;
       this.particles.emitAmbient(this.W * 1.15 / this.cam.zoom,
         this.H * 1.15 / this.cam.zoom, ambientAmt);
 
@@ -429,7 +432,8 @@
     /* ---- LINEUP: zoom out, reveal all three symbols in a row with their
        labels, hold, then "close in" the text before the swirl. ---- */
     _lineup(time, dt, md) {
-      const size = md * 0.11;
+      const size = md * 0.12;
+      const leftX = -this.W * 0.18 / this.cam.zoom;
       this.cam.tZoom = 0.78;              // pull the camera back
       this.cam.ty = 0;
       this.bloomStrength = 0.42;
@@ -438,31 +442,37 @@
       this.texts.community.classList.remove('show');
 
       const slots = this._rowSlots();
+      // The group symbol GLIDES in from its community position to centre
+      // (gather), then all three fan out to the row — no hard cut.
+      const gatherP = seg(time, T.lineupStart, 0.5, util.easeInOutCubic);
+      const fanP = seg(time, T.lineupStart + 0.5, 1.1, softBezier);
       // Text "closes in" (fades + slides toward centre) after the hold.
       const closeP = seg(time, T.lineupHold, T.swirlStart - T.lineupHold, util.easeInOutCubic);
 
-      slots.forEach((s, i) => {
-        const ip = seg(time, T.lineupStart + i * 0.12, 1.2, softBezier); // gentle stagger
-        const x = util.lerp(0, s.x, ip);
-        const alpha = util.clamp(ip * 1.6, 0, 1);
-        const scale = util.lerp(0.3, 1, ip);
+      slots.forEach((s) => {
+        const originX = s.name === 'group' ? leftX : 0;      // group carries over from the left
+        const gatheredX = util.lerp(originX, 0, gatherP);
+        const x = util.lerp(gatheredX, s.x, fanP);
+        const alpha = s.name === 'group' ? 1 : util.clamp(gatherP * 1.5, 0, 1);
+        const scale = s.name === 'group' ? 1 : util.lerp(0.4, 1, gatherP);
         this.sceneIcons.push({ name: s.name, x: x, y: 0, size: size * scale, alpha: alpha, rot: 0 });
 
-        // Label beneath each symbol; fades in, then closes in with the group.
-        const lblAlpha = util.clamp(ip * 1.6 - 0.3, 0, 1) * (1 - closeP);
+        // Label beneath each symbol; fades in with the fan-out, then closes in.
+        const lblAlpha = util.clamp(fanP * 1.6 - 0.3, 0, 1) * (1 - closeP);
         const lx = util.lerp(x, x * 0.22, closeP);
         this.lineupLabels.push({ x: lx, y: size * 1.7, text: s.label, alpha: lblAlpha, size: md * 0.042 });
       });
 
       // Cues
-      if (this.cue('lineupWhoosh', T.lineupStart)) { this.audio.whoosh(1.0); this.particles.popBurst(0, 0, P.white); }
+      if (this.cue('lineupWhoosh', T.lineupStart)) this.audio.whoosh(1.0);
+      if (this.cue('lineupSpread', T.lineupStart + 0.5)) { this.audio.sparkle(); this.particles.popBurst(0, 0, P.white); }
       if (this.cue('lineupChime', T.lineupSettle)) this.audio.sparkle();
       if (this.cue('lineupClose', T.lineupHold)) this.audio.whoosh(0.6);
     }
 
     /* ---- SPIRAL: symbols swirl inward, orbit, tighten, explode ---- */
     _spiral(time, dt, md) {
-      const size = md * 0.11;
+      const size = md * 0.12;
       this.texts.community.classList.remove('show');
 
       // Camera zooms back in through the build-up (from the pulled-back
@@ -475,22 +485,24 @@
       if (this.cue('spiralSweep', T.swirlStart)) this.audio.sweep(T.explode - T.swirlStart);
       if (this.cue('spiralSeed', T.swirlStart + 0.05)) this.particles.seedSpiral(0, 0, 120);
 
-      // The three symbols swirl in from their row slots toward the centre.
-      if (time < T.swirlStart + 1.3) {
+      // The three symbols keep spinning inward the whole way, shrinking as
+      // they orbit toward the centre — they stay fully visible right up to
+      // the explosion (they don't fade out early).
+      if (time < T.explode) {
         const slots = this._rowSlots();
-        const cp = seg(time, T.swirlStart, 1.0, util.easeInCubic);
+        const p = seg(time, T.swirlStart, T.explode - T.swirlStart, util.easeInCubic);
         this.spiralIcons = slots.map((s) => {
           const r0 = Math.abs(s.x);
           const a0 = s.x < 0 ? Math.PI : 0;         // start angle from its slot
-          const ang = a0 + cp * TAU * 1.4;          // 1.4 turns inward
-          const rad = r0 * (1 - cp);
+          const ang = a0 + p * TAU * 3;             // keep spinning inward
+          const rad = r0 * (1 - p);
           return {
             name: s.name,
             x: Math.cos(ang) * rad,
             y: Math.sin(ang) * rad,
-            size: size * (1 - 0.8 * cp),
-            alpha: 1 - seg(time, T.swirlStart + 0.7, 0.5),
-            rot: cp * TAU * 1.6
+            size: size * (1 - 0.72 * p),            // shrink, but never vanish
+            alpha: 1,                                // stay visible until the explosion
+            rot: a0 + p * TAU * 2.5
           };
         });
       }
