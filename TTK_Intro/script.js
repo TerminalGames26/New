@@ -257,11 +257,8 @@
       this.spiralIcons = null;
       this.lineupLabels = null;
 
-      // Ambient floating particle field (density ramps with the action;
-      // the intro is intentionally calmer so the logo reads clearly).
-      let ambientAmt = 1.0;
-      if (time < T.transition) ambientAmt = 0.5;
-      else if (time > T.swirlStart && time < T.outroStart) ambientAmt = 1.6;
+      // Ambient floating particle field (density ramps with the action).
+      const ambientAmt = time > T.swirlStart && time < T.outroStart ? 1.6 : 1.0;
       this.particles.emitAmbient(this.W * 1.15 / this.cam.zoom,
         this.H * 1.15 / this.cam.zoom, ambientAmt);
 
@@ -487,22 +484,30 @@
 
       // The three symbols keep spinning inward the whole way, shrinking as
       // they orbit toward the centre — they stay fully visible right up to
-      // the explosion (they don't fade out early).
+      // the explosion. Each has its own speed + direction so they swirl OUT
+      // OF SYNC, and every value starts continuously from the row (rot = 0,
+      // pos = slot) so there is no jump when the lineup hands over.
       if (time < T.explode) {
         const slots = this._rowSlots();
         const p = seg(time, T.swirlStart, T.explode - T.swirlStart, util.easeInCubic);
-        this.spiralIcons = slots.map((s) => {
+        const spin = [
+          { turns: 2.2, dir: 1, self: 1.6, sdir: -1 },  // star
+          { turns: 3.4, dir: -1, self: 3.2, sdir: 1 },  // verified
+          { turns: 2.8, dir: -1, self: 2.2, sdir: 1 }   // group
+        ];
+        this.spiralIcons = slots.map((s, i) => {
+          const sp = spin[i];
           const r0 = Math.abs(s.x);
-          const a0 = s.x < 0 ? Math.PI : 0;         // start angle from its slot
-          const ang = a0 + p * TAU * 3;             // keep spinning inward
+          const a0 = s.x < 0 ? Math.PI : 0;              // start at its row slot
+          const ang = a0 + sp.dir * p * TAU * sp.turns;
           const rad = r0 * (1 - p);
           return {
             name: s.name,
             x: Math.cos(ang) * rad,
             y: Math.sin(ang) * rad,
-            size: size * (1 - 0.72 * p),            // shrink, but never vanish
-            alpha: 1,                                // stay visible until the explosion
-            rot: a0 + p * TAU * 2.5
+            size: size * (1 - 0.72 * p),                 // shrink, but never vanish
+            alpha: 1,                                     // stay visible until the explosion
+            rot: sp.sdir * p * TAU * sp.self             // starts at 0 -> no jump
           };
         });
       }
