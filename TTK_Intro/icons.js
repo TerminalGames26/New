@@ -1,20 +1,20 @@
 /* =====================================================================
    TTK Intro — icons.js
    ---------------------------------------------------------------------
-   Programmatically drawn glossy, 3D-ish white icons used by the creator /
-   developer / community scenes:
+   A realistic lunar surface, generated and rendered procedurally.
 
-     - Star            (Some Amazing Creators)
-     - Verified badge  (Popular Developers)  — original scalloped seal
-     - Group / people  (Amazing Community Members)
+   Approach (no image assets — pure maths):
+     1. Build a tiling HEIGHTFIELD from fractal value-noise, then carve
+        hundreds of craters of varying size (each a depressed bowl with a
+        raised rim) plus dark "maria".
+     2. Bake real diffuse lighting into a grayscale surface map using the
+        heightfield normals and a low sun angle (long shadows).
+     3. Render it in perspective with a voxel-terrain raycaster so the
+        surface recedes to a curved horizon under the black sky, with
+        aerial haze fading distant terrain (hides tiling + adds realism).
 
-   Each icon is built from a reusable "path builder" so it can be:
-     1. extruded  (many offset copies shaded dark->light for real depth)
-     2. front-filled with a glossy white gradient
-     3. finished with a rim light + specular highlight
-
-   All icons are drawn centred on (0,0) at a given size, so the caller
-   only has to translate + scale.
+   The whole surface is baked once into an offscreen bitmap (regenerated
+   only on resize), so the per-frame cost is a single drawImage.
    ===================================================================== */
 
 window.TTK = window.TTK || {};
@@ -23,228 +23,184 @@ window.TTK = window.TTK || {};
   'use strict';
 
   const util = TTK.util;
-  const P = TTK.PALETTE;
-  const TAU = Math.PI * 2;
 
-  function mix(a, b, t) {
-    const A = util.hexRgb(a), B = util.hexRgb(b);
-    return 'rgb(' + ((A.r + (B.r - A.r) * t) | 0) + ',' +
-      ((A.g + (B.g - A.g) * t) | 0) + ',' + ((A.b + (B.b - A.b) * t) | 0) + ')';
+  const N = 512;                 // heightfield resolution (power of two -> fast wrap)
+  const MASK = N - 1;
+
+  /* ---- deterministic value noise ---- */
+  function hash(ix, iy) {
+    let h = (ix * 374761393 + iy * 668265263) | 0;
+    h = (h ^ (h >> 13)) * 1274126177 | 0;
+    return ((h ^ (h >> 16)) >>> 0) / 4294967296;
+  }
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  function vnoise(x, y) {
+    const ix = Math.floor(x), iy = Math.floor(y);
+    const fx = x - ix, fy = y - iy;
+    const a = hash(ix, iy), b = hash(ix + 1, iy), c = hash(ix, iy + 1), d = hash(ix + 1, iy + 1);
+    const u = smooth(fx), v = smooth(fy);
+    return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v;
+  }
+  function fbm(x, y) {
+    let s = 0, amp = 0.5, f = 1;
+    for (let o = 0; o < 5; o++) { s += amp * vnoise(x * f, y * f); f *= 2; amp *= 0.5; }
+    return s;
   }
 
-  const Icons = {
-    /* Soft outer glow behind an icon. */
-    _glow(ctx, r, alpha, color) {
-      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
-      g.addColorStop(0, util.rgba(color || '#ffffff', 0.55 * alpha));
-      g.addColorStop(0.5, util.rgba(color || '#ffffff', 0.22 * alpha));
-      g.addColorStop(1, util.rgba(color || '#ffffff', 0));
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, TAU);
-      ctx.fill();
-      ctx.restore();
-    },
+  let _seed = 987654321;
+  function rnd() { _seed = (_seed * 1664525 + 1013904223) >>> 0; return _seed / 4294967296; }
 
-    /* Extrude a path: fill many offset copies from back (dark) to front,
-       giving the icon a solid 3D thickness. `build(ctx)` must define the
-       path (without filling). */
-    _extrude(ctx, build, depth, steps, colDark, colLight) {
-      const ex = 0.22, ey = 1.0, en = Math.hypot(ex, ey);
-      for (let i = steps; i >= 1; i--) {
-        const f = i / steps;
-        ctx.save();
-        ctx.translate((ex / en) * depth * f, (ey / en) * depth * f);
-        build(ctx);
-        ctx.fillStyle = mix(colDark, colLight, 1 - f);
-        ctx.fill();
-        ctx.restore();
-      }
-    },
+  const Moon = {
+    horizonFrac: 0.4,
+    _H: null, _shade: null,       // heightfield + baked grayscale (Uint8 rgb packed)
+    _bitmap: null, _horizonY: 0, _surfaceY: 0,
 
-    /* --------------------------------------------------------------
-       STAR — five point glossy 3D star.
-       -------------------------------------------------------------- */
-    _starPath(ctx, size) {
-      const outer = size, inner = size * 0.44;
-      ctx.beginPath();
-      for (let i = 0; i < 10; i++) {
-        const rad = i % 2 === 0 ? outer : inner;
-        const a = -Math.PI / 2 + i * Math.PI / 5;
-        const x = Math.cos(a) * rad, y = Math.sin(a) * rad;
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-    },
+    /* ---- build the heightfield + baked shaded surface (once) ---- */
+    _generate() {
+      const H = new Float32Array(N * N);
 
-    star(ctx, size, alpha, rot) {
-      alpha = alpha == null ? 1 : alpha;
-      ctx.save();
-      ctx.globalAlpha = util.clamp(alpha, 0, 1);
-      this._glow(ctx, size * 1.8, alpha, '#ffdf6b');   // warm golden glow
-      ctx.rotate(rot || 0);
-
-      const build = (c) => this._starPath(c, size);
-      this._extrude(ctx, build, size * 0.32, 12, '#a06a05', '#ffcf3d');
-
-      // glossy gold front face
-      build(ctx);
-      const body = ctx.createRadialGradient(-size * 0.2, -size * 0.3, 0, 0, 0, size);
-      body.addColorStop(0, '#fffdf0');
-      body.addColorStop(0.4, '#ffe987');
-      body.addColorStop(0.75, '#ffcf3d');
-      body.addColorStop(1, '#f5a800');
-      ctx.fillStyle = body;
-      ctx.fill();
-
-      // rim + specular
-      ctx.lineWidth = size * 0.03;
-      ctx.strokeStyle = util.rgba('#fff7cf', 0.85 * alpha);
-      ctx.stroke();
-      ctx.fillStyle = util.rgba('#ffffff', 0.9 * alpha);
-      ctx.beginPath();
-      ctx.ellipse(-size * 0.22, -size * 0.3, size * 0.22, size * 0.12, -0.5, 0, TAU);
-      ctx.fill();
-      ctx.restore();
-    },
-
-    /* --------------------------------------------------------------
-       VERIFIED — blue rounded-square badge, tilted, with a white check.
-       -------------------------------------------------------------- */
-    _roundRect(ctx, x, y, w, h, r) {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.arcTo(x + w, y, x + w, y + h, r);
-      ctx.arcTo(x + w, y + h, x, y + h, r);
-      ctx.arcTo(x, y + h, x, y, r);
-      ctx.arcTo(x, y, x + w, y, r);
-      ctx.closePath();
-    },
-
-    verified(ctx, size, alpha) {
-      alpha = alpha == null ? 1 : alpha;
-      ctx.save();
-      ctx.globalAlpha = util.clamp(alpha, 0, 1);
-      this._glow(ctx, size * 1.7, alpha, '#7db0ff');   // cool blue glow
-
-      // Tilt the whole badge slightly, like the reference.
-      ctx.rotate(-0.13);
-
-      const s = size * 0.92;                 // half-extent of the square
-      const r = s * 0.42;                    // corner radius (rounded square)
-      const build = (c) => this._roundRect(c, -s, -s, s * 2, s * 2, r);
-
-      // 3D extrusion in blue.
-      this._extrude(ctx, build, size * 0.3, 12, '#0a3ca8', '#2f7bff');
-
-      // Blue glossy front face.
-      build(ctx);
-      const body = ctx.createLinearGradient(0, -s, 0, s);
-      body.addColorStop(0, '#4d93ff');
-      body.addColorStop(0.5, '#1f74ff');
-      body.addColorStop(1, '#0a58f0');
-      ctx.fillStyle = body;
-      ctx.fill();
-
-      // Soft top sheen.
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const sheen = ctx.createLinearGradient(0, -s, 0, 0);
-      sheen.addColorStop(0, 'rgba(255,255,255,0.35)');
-      sheen.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = sheen;
-      build(ctx);
-      ctx.fill();
-      ctx.restore();
-
-      // White check mark (bold, rounded) with a subtle inner shadow.
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.lineWidth = size * 0.19;
-      ctx.strokeStyle = 'rgba(8,50,150,0.35)';
-      ctx.beginPath();
-      ctx.moveTo(-size * 0.36, size * 0.04);
-      ctx.lineTo(-size * 0.08, size * 0.34);
-      ctx.lineTo(size * 0.42, -size * 0.30);
-      ctx.stroke();
-      ctx.strokeStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.moveTo(-size * 0.38, size * 0.0);
-      ctx.lineTo(-size * 0.10, size * 0.30);
-      ctx.lineTo(size * 0.40, -size * 0.34);
-      ctx.stroke();
-
-      // corner specular highlight
-      ctx.fillStyle = util.rgba('#ffffff', 0.4 * alpha);
-      ctx.beginPath();
-      ctx.ellipse(-s * 0.42, -s * 0.5, s * 0.5, s * 0.18, -0.5, 0, TAU);
-      ctx.fill();
-      ctx.restore();
-    },
-
-    /* --------------------------------------------------------------
-       GROUP — three glossy 3D person silhouettes.
-       -------------------------------------------------------------- */
-    _personPath(ctx, cx, cy, s) {
-      ctx.beginPath();
-      ctx.arc(cx, cy - s * 0.55, s * 0.42, 0, TAU);
-      ctx.moveTo(cx - s * 0.7, cy + s * 0.85);
-      ctx.arc(cx, cy + s * 0.4, s * 0.7, Math.PI, 0, false);
-      ctx.closePath();
-    },
-
-    group(ctx, size, alpha) {
-      alpha = alpha == null ? 1 : alpha;
-      ctx.save();
-      ctx.globalAlpha = util.clamp(alpha, 0, 1);
-      this._glow(ctx, size * 1.8, alpha, P.softPink);
-
-      const s = size * 0.62;
-
-      // Each of the three people is its own fully-3D object: extruded body
-      // + glossy front face + rim, drawn back-to-front (painter's order) so
-      // the whole group reads as three solid 3D figures, not flat cut-outs.
-      const persons = [
-        { cx: -size * 0.6, cy: -size * 0.02, sc: s * 0.82, top: '#ffe4f4', bot: '#ffb2e0' },
-        { cx: size * 0.6, cy: -size * 0.02, sc: s * 0.82, top: '#ffe4f4', bot: '#ffb2e0' },
-        { cx: 0, cy: size * 0.14, sc: s, top: '#ffffff', bot: '#ffd2ec' }
-      ];
-
-      for (const pr of persons) {
-        const build = (c) => this._personPath(c, pr.cx, pr.cy, pr.sc);
-        // 3D extrusion for this figure
-        this._extrude(ctx, build, size * 0.26, 10, '#b53a7e', '#ff9ed6');
-        // glossy front face
-        build(ctx);
-        const g = ctx.createLinearGradient(0, pr.cy - pr.sc, 0, pr.cy + pr.sc);
-        g.addColorStop(0, pr.top);
-        g.addColorStop(1, pr.bot);
-        ctx.fillStyle = g;
-        ctx.fill();
-        // rim light
-        ctx.lineWidth = size * 0.02;
-        ctx.strokeStyle = util.rgba('#ffffff', 0.5 * alpha);
-        ctx.stroke();
+      // rolling base terrain + finer detail
+      for (let j = 0; j < N; j++) {
+        for (let i = 0; i < N; i++) {
+          let e = fbm(i * 0.022, j * 0.022) * 0.7
+            + fbm(i * 0.08, j * 0.08) * 0.22
+            + fbm(i * 0.25, j * 0.25) * 0.08;
+          H[j * N + i] = e;
+        }
       }
 
-      // specular highlight on the front figure's head
-      ctx.fillStyle = util.rgba('#ffffff', 0.7 * alpha);
-      ctx.beginPath();
-      ctx.ellipse(-size * 0.14, -size * 0.44, size * 0.16, size * 0.09, -0.5, 0, TAU);
-      ctx.fill();
-      ctx.restore();
+      // craters: a few huge, many tiny
+      _seed = 987654321;
+      const carve = (count, rmin, rmax, depth) => {
+        for (let k = 0; k < count; k++) {
+          const cx = rnd() * N, cy = rnd() * N;
+          const r = rmin + rnd() * (rmax - rmin);
+          const dep = depth * (0.7 + rnd() * 0.6);
+          const R2 = (r * 1.4) | 0;
+          for (let dy = -R2; dy <= R2; dy++) {
+            for (let dx = -R2; dx <= R2; dx++) {
+              const d = Math.hypot(dx, dy) / r;
+              if (d > 1.4) continue;
+              const ix = (Math.floor(cx + dx)) & MASK;
+              const iy = (Math.floor(cy + dy)) & MASK;
+              const rim = Math.exp(-((d - 1.0) / 0.16) * ((d - 1.0) / 0.16)) * dep * 0.5;
+              const bowl = d < 1 ? -dep * (1 - d * d) : 0;
+              H[iy * N + ix] += bowl + rim;
+            }
+          }
+        }
+      };
+      carve(5, N * 0.11, N * 0.2, 0.55);
+      carve(16, N * 0.05, N * 0.1, 0.42);
+      carve(55, N * 0.02, N * 0.05, 0.3);
+      carve(230, N * 0.006, N * 0.02, 0.22);
+
+      // normalise 0..1
+      let mn = Infinity, mx = -Infinity;
+      for (let i = 0; i < N * N; i++) { if (H[i] < mn) mn = H[i]; if (H[i] > mx) mx = H[i]; }
+      const inv = 1 / (mx - mn);
+      for (let i = 0; i < N * N; i++) H[i] = (H[i] - mn) * inv;
+
+      // albedo (maria darker, speckle)
+      const alb = new Float32Array(N * N);
+      for (let j = 0; j < N; j++) {
+        for (let i = 0; i < N; i++) {
+          let base = 0.62;
+          const m = fbm(i * 0.006 + 40, j * 0.006 + 40);
+          if (m < 0.44) base = util.lerp(0.4, 0.62, m / 0.44);   // maria
+          base += (hash(i * 7, j * 13) - 0.5) * 0.06;             // speckle
+          alb[j * N + i] = util.clamp(base, 0.2, 0.85);
+        }
+      }
+
+      // bake diffuse shading (sun low from the left)
+      const shade = new Uint8ClampedArray(N * N);
+      const relief = 42;                 // vertical exaggeration for normals
+      let lx = -0.72, ly = -0.45, lz = 0.53;
+      const ll = Math.hypot(lx, ly, lz); lx /= ll; ly /= ll; lz /= ll;
+      for (let j = 0; j < N; j++) {
+        for (let i = 0; i < N; i++) {
+          const hL = H[j * N + ((i - 1) & MASK)], hR = H[j * N + ((i + 1) & MASK)];
+          const hU = H[((j - 1) & MASK) * N + i], hD = H[((j + 1) & MASK) * N + i];
+          let nx = (hL - hR) * relief, ny = (hU - hD) * relief, nz = 1;
+          const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
+          let diff = nx * lx + ny * ly + nz * lz;
+          if (diff < 0) diff = 0;
+          const s = 0.1 + 1.05 * diff;                   // ambient + diffuse
+          shade[j * N + i] = alb[j * N + i] * s * 255;
+        }
+      }
+
+      this._H = H; this._shade = shade;
     },
 
-    /* Dispatch by name — used by the scene manager. */
-    draw(name, ctx, size, alpha, rot) {
-      if (name === 'star') this.star(ctx, size, alpha, rot);
-      else if (name === 'verified') this.verified(ctx, size, alpha);
-      else if (name === 'group') this.group(ctx, size, alpha);
-    }
+    /* ---- perspective ground-plane render (floor casting) into a bitmap ----
+       For every screen pixel below the horizon we project back onto the
+       flat lunar plane, bilinear-sample the baked shaded surface and apply
+       aerial haze. Smooth (filtered) and fast — no voxel blocks. */
+    render(w, h) {
+      if (!this._shade) this._generate();
+      const scale = 0.8;
+      const rw = Math.max(2, Math.round(w * scale));
+      const rh = Math.max(2, Math.round(h * scale));
+      const horizon = Math.round(rh * this.horizonFrac);
+      const cv = document.createElement('canvas');
+      cv.width = rw; cv.height = rh;
+      const ctx = cv.getContext('2d');
+      const img = ctx.createImageData(rw, rh);
+      const data = img.data;
+      const shade = this._shade;
+
+      const focal = rh * 0.9;
+      const camH = 1.75;         // camera height above the plane
+      const camZ = 0.5;          // forward offset into the texture
+      const TS = 15;             // texels per world unit (crater scale)
+      const hz = [20, 25, 40];   // haze colour toward the horizon
+      const cx = rw / 2;
+
+      for (let y = horizon; y < rh; y++) {
+        const p = y - horizon + 0.0001;
+        const worldZ = camH * focal / p;
+        const rowScaleX = worldZ / focal;
+        const fog = util.clamp((worldZ - 2.2) / 55, 0, 1);
+        const fogp = fog * fog;
+        const vtex = (worldZ + camZ) * TS + N * 0.13;
+        const vy0 = Math.floor(vtex), fyv = vtex - vy0;
+        const r0 = (vy0 & MASK) * N, r1 = ((vy0 + 1) & MASK) * N;
+        let row = y * rw;
+        for (let x = 0; x < rw; x++) {
+          const worldX = (x - cx) * rowScaleX;
+          const utex = worldX * TS + N * 0.5;   // shift wrap seam off-centre
+          const ux0 = Math.floor(utex), fxu = utex - ux0;
+          const c0 = ux0 & MASK, c1 = (ux0 + 1) & MASK;
+          const a = shade[r0 + c0], b = shade[r0 + c1];
+          const c = shade[r1 + c0], d = shade[r1 + c1];
+          const g = (a * (1 - fxu) + b * fxu) * (1 - fyv) + (c * (1 - fxu) + d * fxu) * fyv;
+          const o = (row + x) * 4;
+          data[o] = g + (hz[0] - g) * fogp;
+          data[o + 1] = g + (hz[1] - g) * fogp;
+          data[o + 2] = g + (hz[2] - g) * fogp;
+          data[o + 3] = 255;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+
+      const out = document.createElement('canvas');
+      out.width = w; out.height = h;
+      const octx = out.getContext('2d');
+      octx.imageSmoothingEnabled = true;
+      octx.drawImage(cv, 0, 0, w, h);
+
+      this._bitmap = out;
+      this._horizonY = horizon / scale;
+      this._surfaceY = h * 0.74;      // where the letters land (near foreground)
+    },
+
+    draw(ctx) { if (this._bitmap) ctx.drawImage(this._bitmap, 0, 0); },
+    horizonY() { return this._horizonY; },
+    surfaceY() { return this._surfaceY; }
   };
 
-  TTK.Icons = Icons;
+  TTK.Moon = Moon;
 
 })(window.TTK);

@@ -111,7 +111,12 @@ window.TTK = window.TTK || {};
     gold: '#fff2b0',
     heart: '#ff7ec2',
     lilac: '#f2c7ff',
-    blue: '#2b7bff'
+    blue: '#2b7bff',
+    // moon / metal greys
+    dustLight: '#e6e9ee',
+    dustMid: '#c2c7d0',
+    dustDark: '#9298a2',
+    star: '#ffffff'
   };
   TTK.PALETTE = PALETTE;
 
@@ -605,6 +610,50 @@ window.TTK = window.TTK || {};
           size: util.rand(5, 16), sizeEnd: util.rand(0, 4),
           life: util.rand(1.1, 2.6), vr: util.rand(-8, 8),
           twinkle: util.rand(0, 0.6), trail: true, fadeOut: 0.55
+        });
+      }
+    }
+
+    // Moon-dust plume kicked up when a letter slams into the surface.
+    moonDust(x, y, power) {
+      power = power || 1;
+      const greys = [PALETTE.dustLight, PALETTE.dustMid, PALETTE.dustDark, PALETTE.white];
+      // Upward / outward plume
+      const n = Math.floor(46 * power);
+      for (let i = 0; i < n; i++) {
+        const a = -Math.PI / 2 + util.rand(-1.15, 1.15);   // mostly up + out
+        const sp = util.rand(70, 430) * power;
+        this.spawn({
+          type: util.pick(['dust', 'dust', 'glow', 'spark']),
+          color: util.pick(greys),
+          x: x + util.rand(-16, 16), y: y + util.rand(-4, 4),
+          vx: Math.cos(a) * sp * 0.7, vy: Math.sin(a) * sp,
+          grav: util.rand(220, 420), drag: 0.86,
+          size: util.rand(7, 22), sizeEnd: util.rand(2, 9),
+          life: util.rand(0.7, 1.8), vr: util.rand(-4, 4), fadeOut: 0.62
+        });
+      }
+      // Low, wide ground sheet spreading sideways along the surface
+      const m = Math.floor(20 * power);
+      for (let i = 0; i < m; i++) {
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        this.spawn({
+          type: 'dust',
+          color: util.pick([PALETTE.dustMid, PALETTE.dustDark]),
+          x: x, y: y, vx: dir * util.rand(140, 460) * power, vy: util.rand(-50, 25),
+          grav: 160, drag: 0.9, size: util.rand(9, 24), sizeEnd: util.rand(3, 7),
+          life: util.rand(0.6, 1.4), fadeOut: 0.6
+        });
+      }
+      // A few heavier debris flecks
+      for (let i = 0; i < Math.floor(8 * power); i++) {
+        const a = -Math.PI / 2 + util.rand(-0.9, 0.9);
+        const sp = util.rand(200, 520) * power;
+        this.spawn({
+          type: 'glitter', color: util.pick([PALETTE.dustLight, PALETTE.dustDark]),
+          x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          grav: 620, drag: 0.98, size: util.rand(4, 9), sizeEnd: 2,
+          life: util.rand(0.8, 1.6), vr: util.rand(-8, 8), trail: true, fadeOut: 0.5
         });
       }
     }

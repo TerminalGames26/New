@@ -1,25 +1,25 @@
 /* =====================================================================
    TTK Intro — logo.js
    ---------------------------------------------------------------------
-   Programmatically drawn glossy rounded "bubble" letters spelling TTK.
+   Programmatically drawn 3D "glossy metal" letters spelling TTK.
 
-   The letters are NOT text. Each letter is described as a set of thick
-   round-capped stroke segments in a normalised unit box (height = 1).
-   Rendering them as layered strokes lets us fake a convincing 3D glossy
-   look cheaply and reliably:
+   The letters are NOT text. Each is described as thick round-capped stroke
+   segments in a normalised unit box and rendered in layered passes to fake
+   a convincing polished-gunmetal 3D look:
 
-     1. outer glow          (soft pink bloom around the letter)
-     2. dark base           (offset downward — gives depth / thickness)
-     3. gradient body       (light pink top -> deep pink bottom)
-     4. inner specular      (bright streak along the upper edge)
-     5. top rim highlight   (thin white line — the glossy shine)
-     6. bottom reflection   (subtle light bounce underneath)
-     7. floating sparkle glints
+     1. subtle outer rim glow (separates the dark metal from the dark sky)
+     2. contact shadow        (grounds the letter where it lands)
+     3. 3D extrusion          (diagonal lower-right bevel = real depth)
+     4. metallic front face    (dark→bright→dark reflective gradient)
+     5. inner specular         (bright streak along the top)
+     6. top rim shine          (the glossy metal edge)
 
-   The class also exposes per-letter transforms (offset / scale / alpha /
-   tilt) so the scene manager can slide the letters in, pulse them, and
-   dissolve them, plus getPoints() to sample the letter outline for the
-   dissolve + reform particle effects.
+   Each letter is rendered ONCE into an offscreen bitmap and then that
+   bitmap is dropped / squashed / faded as a single unit, which keeps the
+   motion clean and cheap.
+
+   Per-letter state (offset, scaleX/scaleY for the landing squash, alpha)
+   is driven by the scene director in script.js.
    ===================================================================== */
 
 window.TTK = window.TTK || {};
@@ -28,11 +28,9 @@ window.TTK = window.TTK || {};
   'use strict';
 
   const util = TTK.util;
-  const P = TTK.PALETTE;
   const TAU = Math.PI * 2;
 
-  /* Letter geometry in a unit box: x in [-0.5,0.5], y in [-0.5,0.5].
-     Each letter is a list of polyline segments (arrays of [x,y]). */
+  /* Letter geometry in a unit box: x,y in [-0.5, 0.5]. */
   const GEOMETRY = {
     T: [
       [[-0.42, -0.4], [0.42, -0.4]],   // top bar
@@ -45,7 +43,6 @@ window.TTK = window.TTK || {};
     ]
   };
 
-  /* Small colour-mix helper for the 3D extrusion shading. */
   function mix(a, b, t) {
     const A = util.hexRgb(a), B = util.hexRgb(b);
     return 'rgb(' + ((A.r + (B.r - A.r) * t) | 0) + ',' +
@@ -54,33 +51,33 @@ window.TTK = window.TTK || {};
 
   class Logo {
     constructor() {
-      // Layout: three letters T T K, spaced along x (wider spacing so the
-      // glossy bubbles breathe and never look cramped/overlapping).
-      // Base positions are relative to the logo centre (unit = letter height).
       this.letters = [
-        { type: 'T', baseX: -1.18, tilt: 0.15 }, // first T leans slightly right
-        { type: 'T', baseX: 0.0, tilt: 0.0 },
-        { type: 'K', baseX: 1.16, tilt: 0.0 }
+        { type: 'T', baseX: -1.16, tilt: 0 },
+        { type: 'T', baseX: 0.0, tilt: 0 },
+        { type: 'K', baseX: 1.14, tilt: 0 }
       ];
-      // Per-letter animation state (offset in px, scale, alpha, extra tilt).
       this.state = this.letters.map(() => ({
-        ox: 0, oy: 0, scale: 1, alpha: 1, tilt: 0
+        ox: 0, oy: 0, scale: 1, scaleX: 1, scaleY: 1, alpha: 1, tilt: 0
       }));
-
-      // Each letter is rendered ONCE (at full opacity) into an offscreen
-      // bitmap, then that bitmap is faded/scaled as a single unit. This is
-      // what keeps the fade-in clean: compositing the many overlapping
-      // strokes per-frame at partial alpha would reveal the construction
-      // strokes as visible seams.
       this._cache = {};
-      this._R = 400;   // reference letter height in the cached bitmap
+      this._R = 400;
     }
 
-    /* Build (and memoise) a full-opacity bitmap of a letter type. */
+    resetHidden() {
+      for (const s of this.state) {
+        s.ox = 0; s.oy = 0; s.scale = 1; s.scaleX = 1; s.scaleY = 1; s.alpha = 0; s.tilt = 0;
+      }
+    }
+
+    letterCenter(i, cx, cy, h) {
+      const s = this.state[i];
+      return { x: cx + this.letters[i].baseX * h + s.ox, y: cy + s.oy };
+    }
+
     _getBitmap(type) {
       if (this._cache[type]) return this._cache[type];
       const R = this._R;
-      const half = Math.ceil(R * 1.35);   // padding for glow / extrusion / shadow
+      const half = Math.ceil(R * 1.35);
       const size = half * 2;
       const cv = document.createElement('canvas');
       cv.width = cv.height = size;
@@ -92,31 +89,17 @@ window.TTK = window.TTK || {};
       return bmp;
     }
 
-    /* Reset every letter to a hidden, offscreen state. */
-    resetHidden() {
-      for (const s of this.state) { s.ox = 0; s.oy = 0; s.scale = 1; s.alpha = 0; s.tilt = 0; }
-    }
-
-    /* World position of a letter's centre given logo centre + height. */
-    letterCenter(i, cx, cy, h) {
-      const L = this.letters[i], s = this.state[i];
-      return { x: cx + L.baseX * h + s.ox, y: cy + s.oy };
-    }
-
-    /* Draw a single glossy 3D bubble letter centred at (0,0).
-       The bubble body is built from thick round-capped strokes; real
-       depth comes from an extrusion pass (many offset copies shaded from
-       dark-back to lighter-side) with the bright gradient front face and
-       specular highlights layered on top. */
+    /* Draw a single glossy-metal 3D letter centred at (0,0). */
     _drawLetter(ctx, type, h, alpha) {
       const segs = GEOMETRY[type];
-      const W = h * 0.27;            // stroke thickness (bubble width)
+      const W = h * 0.27;
+
+      // Brushed silver metal front face (matte, light-top gradient).
       const grad = ctx.createLinearGradient(0, -h * 0.5, 0, h * 0.5);
-      grad.addColorStop(0, '#fff2fa');
-      grad.addColorStop(0.32, '#ffe0f2');
-      grad.addColorStop(0.6, P.pink);
-      grad.addColorStop(0.82, P.hotPink);
-      grad.addColorStop(1, '#ff4fa8');
+      grad.addColorStop(0.00, '#c8cbcf');
+      grad.addColorStop(0.35, '#a3a6ac');
+      grad.addColorStop(0.62, '#84878d');
+      grad.addColorStop(1.00, '#5d6066');
 
       const stroke = (offx, offy, style, width) => {
         ctx.lineCap = 'round';
@@ -137,66 +120,70 @@ window.TTK = window.TTK || {};
       ctx.save();
       ctx.globalAlpha = util.clamp(alpha, 0, 1);
 
-      // 1. Outer glow / bloom
+      // 1. Soft outer white glow (the neon-edge halo around the letter)
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.shadowColor = util.rgba(P.hotPink, 0.9);
+      ctx.shadowColor = 'rgba(255,255,255,0.9)';
       ctx.shadowBlur = W * 1.3;
-      stroke(0, 0, util.rgba(P.pink, 0.5), W * 1.05);
+      stroke(0, 0, 'rgba(255,255,255,0.28)', W * 1.06);
       ctx.restore();
 
-      // 2. Contact shadow (grounds the letter)
+      // 2. Contact shadow (shows where it lands on the bright moon)
       ctx.save();
-      ctx.shadowColor = 'rgba(120,20,70,0.45)';
-      ctx.shadowBlur = W * 0.9;
-      ctx.shadowOffsetY = W * 0.5;
-      stroke(0, W * 0.15, 'rgba(120,20,70,0.5)', W);
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur = W * 0.8;
+      ctx.shadowOffsetY = W * 0.45;
+      stroke(0, W * 0.15, 'rgba(0,0,0,0.55)', W);
       ctx.restore();
 
-      // 3. 3D extrusion (back -> front) — a short DIAGONAL bevel toward the
-      // lower-right. A shallow down-right offset reads as a chunky 3D edge
-      // instead of a long "drip" line hanging below the letters.
-      const depth = W * 0.32, steps = 10;
-      const ex = 0.62, ey = 0.78; // extrusion direction (unnormalised)
-      const en = Math.hypot(ex, ey);
+      // 3. 3D extrusion — short diagonal lower-right bevel
+      const depth = W * 0.34, steps = 10;
+      const ex = 0.62, ey = 0.78, en = Math.hypot(ex, ey);
       for (let i = steps; i >= 1; i--) {
         const f = i / steps;
         const mag = depth * f;
-        const col = mix('#7a2352', '#d24f92', 1 - f);
+        const col = mix('#2a2c31', '#585b62', 1 - f);
         stroke((ex / en) * mag, (ey / en) * mag, col, W);
       }
 
-      // 4. Gradient front face
-      stroke(0, 0, grad, W);
-
-      // Highlights use a top-fading gradient so the shine sits on the TOP
-      // of each bubble and fades out before the middle — otherwise it runs
-      // the full length of vertical strokes and looks like a line dripping
-      // down the letter.
-      const hiGrad = ctx.createLinearGradient(0, -h * 0.5, 0, -h * 0.02);
-      hiGrad.addColorStop(0, util.rgba('#ffffff', 0.5));
-      hiGrad.addColorStop(1, util.rgba('#ffffff', 0));
-      const rimGrad = ctx.createLinearGradient(0, -h * 0.5, 0, -h * 0.14);
-      rimGrad.addColorStop(0, util.rgba('#ffffff', 0.95));
-      rimGrad.addColorStop(1, util.rgba('#ffffff', 0));
-
-      // 5. Inner specular (upper area only)
+      // 3b. Glowing white edge — a bright rim slightly wider than the face
+      // that reads as the lit outline around the letter (as in the ref).
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      stroke(-W * 0.08, -W * 0.18, hiGrad, W * 0.4);
+      ctx.shadowColor = 'rgba(255,255,255,0.95)';
+      ctx.shadowBlur = W * 0.5;
+      stroke(0, 0, '#ffffff', W * 1.14);
       ctx.restore();
 
-      // 6. Top rim shine
+      // 4. Metallic silver front face (covers the centre, leaving the rim)
+      stroke(0, 0, grad, W);
+
+      // Highlights fade out below the top so vertical strokes don't get a
+      // full-length line.
+      const hiGrad = ctx.createLinearGradient(0, -h * 0.5, 0, -h * 0.02);
+      hiGrad.addColorStop(0, util.rgba('#ffffff', 0.32));
+      hiGrad.addColorStop(1, util.rgba('#ffffff', 0));
+      const rimGrad = ctx.createLinearGradient(0, -h * 0.5, 0, -h * 0.14);
+      rimGrad.addColorStop(0, util.rgba('#ffffff', 1));
+      rimGrad.addColorStop(1, util.rgba('#ffffff', 0));
+
+      // 5. Inner specular streak (upper area only)
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      stroke(-W * 0.02, -W * 0.3, rimGrad, W * 0.11);
+      stroke(-W * 0.08, -W * 0.18, hiGrad, W * 0.42);
+      ctx.restore();
+
+      // 6. Top rim shine (sharp metal highlight)
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      stroke(-W * 0.02, -W * 0.3, rimGrad, W * 0.12);
       ctx.restore();
 
       ctx.restore();
     }
 
     /* Draw the whole logo.
-       opts: { cx, cy, height, alpha, sparkle (bool) }  */
+       opts: { cx, cy, height, alpha }  */
     draw(ctx, opts) {
       const cx = opts.cx, cy = opts.cy, h = opts.height;
       const gAlpha = opts.alpha == null ? 1 : opts.alpha;
@@ -210,44 +197,23 @@ window.TTK = window.TTK || {};
         ctx.save();
         ctx.translate(cx + L.baseX * h + s.ox, cy + s.oy);
         ctx.rotate(L.tilt + s.tilt);
-        ctx.scale(s.scale, s.scale);
-        ctx.globalAlpha = util.clamp(a, 0, 1);   // fade the whole letter as one unit
+        // squash/stretch (landing impact) folded into the base scale
+        ctx.scale(s.scale * s.scaleX, s.scale * s.scaleY);
+        ctx.globalAlpha = util.clamp(a, 0, 1);
         ctx.drawImage(bmp.canvas, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
         ctx.restore();
       }
-
-      // Floating sparkle glints sitting on the glossy surface.
-      if (opts.sparkle && gAlpha > 0.3) {
-        const t = (performance.now() / 1000);
-        for (let i = 0; i < this.letters.length; i++) {
-          const L = this.letters[i], s = this.state[i];
-          if (gAlpha * s.alpha < 0.3) continue;
-          const bx = cx + L.baseX * h + s.ox;
-          const gx = bx + Math.sin(t * 1.3 + i * 2) * h * 0.22;
-          const gy = cy + Math.cos(t * 1.1 + i) * h * 0.28 - h * 0.1;
-          const sp = TTK.SpriteFactory.get('spark', P.white);
-          const d = (10 + 6 * Math.sin(t * 3 + i)) ;
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.globalAlpha = (0.5 + 0.5 * Math.sin(t * 3 + i * 1.7)) * gAlpha;
-          ctx.drawImage(sp, gx - d, gy - d, d * 2, d * 2);
-          ctx.restore();
-        }
-      }
     }
 
-    /* Sample points along the letter outlines in WORLD space.
-       Used to dissolve the logo into glitter and to reform it in the outro.
-       density = approx points per letter. */
+    /* Sample points along the letter outlines in WORLD space (kept for
+       optional effects). */
     getPoints(cx, cy, h, density) {
       density = density || 60;
       const pts = [];
       for (let i = 0; i < this.letters.length; i++) {
         const L = this.letters[i], s = this.state[i];
         const segs = GEOMETRY[L.type];
-        // total length for even distribution
-        let total = 0;
-        const lens = [];
+        let total = 0; const lens = [];
         for (const seg of segs) {
           for (let j = 0; j < seg.length - 1; j++) {
             const dx = (seg[j + 1][0] - seg[j][0]) * h;
@@ -257,7 +223,6 @@ window.TTK = window.TTK || {};
           }
         }
         const n = Math.max(8, Math.round(density));
-        const cosT = Math.cos(L.tilt + s.tilt), sinT = Math.sin(L.tilt + s.tilt);
         const bx = cx + L.baseX * h + s.ox, by = cy + s.oy;
         let li = 0;
         for (const seg of segs) {
@@ -266,16 +231,9 @@ window.TTK = window.TTK || {};
             li++;
             for (let k = 0; k < count; k++) {
               const t = k / count;
-              // local (pre-rotation) coordinate + random thickness offset
-              let lx = util.lerp(seg[j][0], seg[j + 1][0], t) * h;
-              let ly = util.lerp(seg[j][1], seg[j + 1][1], t) * h;
-              lx += util.rand(-h * 0.12, h * 0.12);
-              ly += util.rand(-h * 0.12, h * 0.12);
-              // apply letter rotation + world translation
-              pts.push({
-                x: bx + lx * cosT - ly * sinT,
-                y: by + lx * sinT + ly * cosT
-              });
+              const lx = util.lerp(seg[j][0], seg[j + 1][0], t) * h + util.rand(-h * 0.12, h * 0.12);
+              const ly = util.lerp(seg[j][1], seg[j + 1][1], t) * h + util.rand(-h * 0.12, h * 0.12);
+              pts.push({ x: bx + lx, y: by + ly });
             }
           }
         }

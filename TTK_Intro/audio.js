@@ -25,13 +25,13 @@ window.TTK = window.TTK || {};
 
   const util = TTK.util;
 
-  /* Dreamy I–V–vi–IV progression in C major (bright + cute). Each entry
-     is one bar: a sub-bass root and a chord voicing for pad + arpeggio. */
+  /* Moody, cinematic night-sky progression (vi–IV–I–V in C = Am F C G).
+     Each entry is one bar: a sub-bass root and a chord voicing. */
   const PROG = [
-    { bass: 65.41, notes: [261.63, 329.63, 392.00] }, // C   : C4 E4 G4
-    { bass: 98.00, notes: [246.94, 293.66, 392.00] }, // G   : B3 D4 G4
-    { bass: 110.00, notes: [220.00, 261.63, 329.63] }, // Am  : A3 C4 E4
-    { bass: 87.31, notes: [220.00, 261.63, 349.23] }  // F   : A3 C4 F4
+    { bass: 55.00, notes: [220.00, 261.63, 329.63] }, // Am : A3 C4 E4
+    { bass: 43.65, notes: [220.00, 261.63, 349.23] }, // F  : A3 C4 F4
+    { bass: 65.41, notes: [196.00, 261.63, 329.63] }, // C  : G3 C4 E4
+    { bass: 49.00, notes: [246.94, 293.66, 392.00] }  // G  : B3 D4 G4
   ];
   const ARP_SEQ = [0, 1, 2, 1, 2, 1, 0, 2]; // which chord tone per 8th note
 
@@ -44,11 +44,11 @@ window.TTK = window.TTK || {};
 
       // music state
       this._musicOn = false;
-      this._intensity = 0.32;
+      this._intensity = 0.3;
       this._scheduler = null;
       this._nextNoteTime = 0;
       this._pos = 0;
-      this.bpm = 96;
+      this.bpm = 68;              // slow + cinematic for the night sky
     }
 
     /* Create / resume the context (call from a user gesture). */
@@ -314,6 +314,68 @@ window.TTK = window.TTK || {};
         const f = 3600 * Math.pow(0.94, i) + util.rand(-100, 100);
         this._tone('sine', f, ft, 0.22, 0.05, null, 0.7);
       }
+    }
+
+    /* Falling whoosh as a letter drops toward the moon. */
+    dropWhoosh(dur) {
+      if (!this._ready()) return;
+      dur = dur || 1.1;
+      const t = this.now();
+      const src = this._noise();
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = 1.1;
+      bp.frequency.setValueAtTime(1500, t);
+      bp.frequency.exponentialRampToValueAtTime(280, t + dur);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.24, t + dur * 0.75);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(bp); bp.connect(g); g.connect(this.master);
+      this._reverb(g, 0.25);
+      src.start(t); src.stop(t + dur + 0.05);
+      const o = this._tone('sawtooth', 380, t, dur, 0.05, null, 0.2);
+      o.osc.frequency.exponentialRampToValueAtTime(80, t + dur);
+    }
+
+    /* Heavy landing boom + dusty impact when a letter hits the moon. */
+    boom(power) {
+      if (!this._ready()) return;
+      power = power || 1;
+      const t = this.now();
+      // deep sub thud
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(150 * (0.85 + 0.25 * power), t);
+      o.frequency.exponentialRampToValueAtTime(34, t + 0.5);
+      g.gain.setValueAtTime(0.6 * power, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+      o.connect(g); g.connect(this.master);
+      o.start(t); o.stop(t + 0.8);
+      // low body noise
+      const src = this._noise();
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(900, t);
+      lp.frequency.exponentialRampToValueAtTime(120, t + 0.4);
+      const ng = this.ctx.createGain();
+      ng.gain.setValueAtTime(0.5 * power, t);
+      ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+      src.connect(lp); lp.connect(ng); ng.connect(this.master);
+      this._reverb(ng, 0.4);
+      src.start(t); src.stop(t + 0.5);
+      // dusty high tail
+      const src2 = this._noise();
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2800;
+      const ng2 = this.ctx.createGain();
+      ng2.gain.setValueAtTime(0.14 * power, t + 0.02);
+      ng2.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      src2.connect(hp); hp.connect(ng2); ng2.connect(this.master);
+      this._reverb(ng2, 0.5);
+      src2.start(t); src2.stop(t + 0.6);
     }
 
     shimmer(dur) {

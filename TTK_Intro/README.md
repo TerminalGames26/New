@@ -1,14 +1,17 @@
-# TTK Intro ✨
+# TTK Intro 🌙
 
-A soft, glossy, magical **60 FPS intro animation** built with nothing but
-**HTML, CSS, Canvas, SVG-style path drawing, JavaScript and the Web Audio
-API**. No libraries. No GSAP. No Three.js. No frameworks. No npm. No build
-tools. Just open the file and it plays.
+A cinematic **night-sky / moon** intro built with nothing but **HTML, CSS,
+Canvas, JavaScript and the Web Audio API**. No libraries. No GSAP. No
+Three.js. No frameworks. No npm. No build tools. No image or audio assets —
+the moon, the letters and every sound are generated procedurally in code.
+Just open the file and it plays.
 
-> Aesthetic: rounded glossy **bubble letters**, pastel pinks, white shine,
-> bloom, sparkles, floating glitter and soft magical lighting. The `TTK`
-> logo is drawn entirely in code — the first **T** leans slightly to the
-> right — and every sound is synthesised procedurally at runtime.
+> A realistic, procedurally-generated **lunar surface** stretches to the
+> horizon under a starry sky. The three **TTK** letters — brushed silver
+> metal with a glowing white edge — drop in one at a time and slam into the
+> moon, each landing with a **boom**, a **moon-dust plume** and an
+> **expanding collision shockwave**. It settles into the finished logo with
+> a metal shine, then **“Join TTK Today — .gg/ttk”** fades in.
 
 ---
 
@@ -16,15 +19,13 @@ tools. Just open the file and it plays.
 
 1. Open **`index.html`** in any modern browser (Chrome, Edge, Firefox,
    Safari). No server, install or build step is required.
-2. Click **“Tap to Enter”**. The single click is only there to unlock the
-   Web Audio API (browsers block audio until a user gesture) and to start
-   everything perfectly in sync.
-3. Enjoy the show. A **Replay ✨** button appears at the end, and a mute
-   toggle sits in the top-right corner.
+2. Click **“Tap to Enter”**. The single click only unlocks the Web Audio
+   API (browsers block audio until a user gesture) and starts everything in
+   sync.
+3. A **Replay** button appears at the end; a mute toggle sits top-right.
 
 Opening `index.html` directly from disk (`file://`) works — the scripts are
-plain classic scripts (no ES modules) specifically so there are no CORS
-issues.
+plain classic scripts (no ES modules) so there are no CORS issues.
 
 ---
 
@@ -32,14 +33,11 @@ issues.
 
 | Phase | What happens |
 | ----- | ------------ |
-| **Intro** | Floating sparkles + glowing particles. The three glossy `TTK` letters slide in from three directions with tiny particle trails. The camera slowly zooms, bloom rises, and the logo settles with a small pulse. |
-| **Transition** | The logo dissolves into glitter, particles wipe the screen, and a soft pink gradient background fades in. |
-| **Creators** | A large glowing white ⭐ pops into the middle, slides left, and *“Some Amazing Creators”* fades in beside it. |
-| **Developers** | The star gives way to a white verified-style check badge — *“Popular Developers.”* |
-| **Community** | The badge gives way to a white group icon — *“Amazing Community Members.”* |
-| **Showcase** | The camera pulls back to reveal all three symbols lined up together with their labels (Creators · Developers · Community). It holds, then the labels close in toward the centre. |
-| **Spiral** | The symbols swirl inward from the row and orbit. The orbit speeds up, the spiral tightens, the camera zooms and particle count climbs into an elegant magical explosion of sparkles, glitter, stars, tiny glowing hearts and dust. |
-| **Outro** | The explosion reforms into the big glossy pastel-pink `TTK` logo with soft bloom and floating sparkles. Bottom text fades in: *“Join TTK Community Today — .gg/ttk,”* holds, then fades out. |
+| **Sky** | A smooth fade reveals the dark starry sky and the realistic cratered moon surface receding to the horizon. |
+| **Drops** | The three glossy silver-metal letters drop from above, one at a time at a steady pace, stretching as they accelerate. |
+| **Impact** | Each letter slams into the moon: a landing **boom**, a **moon-dust plume**, an **expanding shockwave ring** across the surface, a squash-and-settle bounce and a small camera shake. |
+| **Logo** | TTK stands assembled on the moon; a bright metal shine sweeps across it. |
+| **Outro** | *“Join TTK Today / .gg/ttk”* fades in. |
 
 ---
 
@@ -48,83 +46,68 @@ issues.
 ```
 TTK_Intro/
 ├── index.html      Page structure, canvas + overlays, script load order
-├── style.css       Backgrounds, captions, start/replay/mute UI
-├── particles.js    Shared math/easing utils + high-performance particle engine
-├── icons.js        Glossy star / verified badge / group icons (canvas)
-├── logo.js         Programmatic glossy rounded bubble-letter TTK logo
-├── audio.js        Fully procedural Web Audio API sound design
-├── script.js       Main orchestrator: timeline, camera, bloom, render loop
+├── style.css       Night-sky background, outro text, start/replay/mute UI
+├── particles.js    Shared math/easing utils + particle engine (moon dust)
+├── icons.js        Procedural realistic moon (heightfield + baked lighting
+│                   + perspective ground-plane render)
+├── logo.js         Programmatic silver-metal 3D bubble letters (glowing edge)
+├── audio.js        Fully procedural sound + night-sky background music
+├── script.js       Main orchestrator: timeline, drops, shockwaves, render
 └── README.md       This file
 ```
 
 Load order matters: `particles.js` loads first because it establishes the
-global `TTK` namespace and the shared math/easing helpers (`TTK.util`) that
-every other module uses.
+global `TTK` namespace and the shared math/easing helpers (`TTK.util`).
 
 ---
 
 ## 🔧 How it works
 
-### Rendering & performance
-- A **single `requestAnimationFrame` loop** with a delta-time clamp so a
-  dropped/backgrounded frame never causes a jump or “snap”.
-- **Object-pooled particles** — no per-frame allocation, so no GC hitches.
-- Particle visuals are **pre-baked into offscreen sprite canvases** and
-  blitted with `drawImage()` under an additive (`lighter`) blend, which is
-  fast and gives the soft magical glow.
-- A **half-resolution bloom post-pass** (downsample → blur → additive
-  composite) provides the dreamy glow without tanking the framerate.
-- A **smoothly interpolated camera** (framerate-independent exponential
-  smoothing) handles all zooms and the tasteful explosion nudge.
+### The realistic moon (`icons.js`)
+No image is used. The surface is built entirely from maths:
 
-### Motion / easing
-Everything uses smooth interpolation. Implemented easing includes
-`easeOutExpo`, `easeInOutCubic`, `easeOutCubic`, `easeOutBack`,
-`easeOutElastic` and a full **cubic-bezier(0.22, 1, 0.36, 1)** evaluator
-(Newton-Raphson solved) for that “expensive” feel. Motion blur is
-simulated via velocity-based particle streaks plus the bloom pass.
+1. A tiling **heightfield** is generated from fractal value-noise, then
+   hundreds of **craters** (each a depressed bowl with a raised rim) and
+   dark **maria** are carved into it.
+2. Real **diffuse lighting** is baked into a grayscale surface map using the
+   heightfield normals and a low sun angle (long, dramatic shadows).
+3. The surface is drawn with a **perspective ground-plane renderer**
+   (floor-casting): every screen pixel below the horizon is projected back
+   onto the plane, bilinear-sampled from the baked texture and faded with
+   **aerial haze** toward the horizon.
 
-### The logo
-Not text. Each letter is defined as thick round-capped stroke segments in a
-normalised unit box and rendered in layered passes — outer glow, dark depth
-base, gradient body, inner specular streak, top rim highlight and bottom
-reflection — to fake convincing 3D gloss. The same geometry is sampled into
-points to dissolve the logo into glitter and to reform it in the outro.
+The whole surface is baked once into an offscreen bitmap (re-baked only on
+resize), so the per-frame cost is a single `drawImage`.
 
-### Audio
-Every sound is generated at runtime with oscillators, filtered noise and
-gain envelopes — **no audio files** — and routed through a procedural
-convolution reverb for a polished, spacious feel:
+### The letters (`logo.js`)
+Not text. Each letter is thick round-capped stroke segments rendered in
+layered passes — outer white glow, contact shadow, a dark 3D **extruded
+bevel**, a **glowing white edge**, the **brushed-silver face** and top
+specular — then baked to a bitmap and dropped / squashed / faded as one unit.
 
-- **SFX:** soft whoosh, sparkle, bell chime, soft pop, glitter, ascending
-  sweep, a redesigned magical explosion (sub impact + glassy shatter +
-  swelling add9 bell bloom + descending glitter cascade) and a final
-  shimmer. Cues fire from the timeline so sound and visuals stay in sync.
-- **Background music:** a looping dreamy chord progression (I–V–vi–IV in C)
-  synthesised live — soft detuned pad, sub bass, a sparkling arpeggio, bell
-  accents and a gentle pulse. A scheduler queues notes ahead of the audio
-  clock, and the score's intensity is driven by the timeline so it swells
-  into the spiral/explosion and eases back for the outro.
+### Motion & polish (`script.js`)
+- One `requestAnimationFrame` loop with a delta-time clamp (no jank).
+- Letters fall on accelerating easing, then **squash-and-settle** on impact.
+- **Collision shockwaves** expand as flattened rings across the surface.
+- Object-pooled **moon-dust** particles, an interpolated camera with impact
+  shake, a twinkling starfield and a subtle additive bloom pass.
+
+### Audio (`audio.js`)
+Everything is synthesised live and sent through a procedural reverb: a
+falling **whoosh** per drop, a deep **landing boom**, sparkles and a final
+shimmer, plus a slow, moody **background music** bed (a night-sky chord
+progression with pad, sub bass and sparse bell accents) whose intensity is
+driven by the timeline.
 
 ---
 
 ## 🎨 Customising
 
-- **Timing:** every scene boundary is a value in the `T` object at the top
-  of `script.js`. Change one number to re-time a beat.
-- **Colours:** the pastel palette lives in `TTK.PALETTE` (`particles.js`)
-  and as CSS variables in `:root` (`style.css`).
-- **Logo shape / letters:** edit `GEOMETRY` and the `letters` layout in
-  `logo.js`.
-- **Particle counts / density:** tune the emitter calls in `script.js` and
-  the pool size passed to `new TTK.ParticleSystem(...)`.
+- **Timing:** the `T` object at the top of `script.js` holds the drop times
+  and pacing (`fallDur`, `dropStart`).
+- **Moon:** tune crater counts, sun angle and camera in `icons.js`
+  (`_generate` and `render`).
+- **Letters:** colours/gloss live in `logo.js` (`_drawLetter`).
+- **Music:** progression, tempo and mood live in `audio.js` (`PROG`, `bpm`).
 
----
-
-## 📦 Requirements
-
-A modern browser with Canvas 2D, `CanvasRenderingContext2D.filter` (for
-bloom) and the Web Audio API — i.e. any current version of Chrome, Edge,
-Firefox or Safari. No network connection is needed after loading.
-
-*All artwork, characters and sounds are original and generated in code.*
+*All artwork and sound are original and generated in code.*
