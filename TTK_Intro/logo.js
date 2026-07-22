@@ -66,6 +66,30 @@ window.TTK = window.TTK || {};
       this.state = this.letters.map(() => ({
         ox: 0, oy: 0, scale: 1, alpha: 1, tilt: 0
       }));
+
+      // Each letter is rendered ONCE (at full opacity) into an offscreen
+      // bitmap, then that bitmap is faded/scaled as a single unit. This is
+      // what keeps the fade-in clean: compositing the many overlapping
+      // strokes per-frame at partial alpha would reveal the construction
+      // strokes as visible seams.
+      this._cache = {};
+      this._R = 400;   // reference letter height in the cached bitmap
+    }
+
+    /* Build (and memoise) a full-opacity bitmap of a letter type. */
+    _getBitmap(type) {
+      if (this._cache[type]) return this._cache[type];
+      const R = this._R;
+      const half = Math.ceil(R * 1.35);   // padding for glow / extrusion / shadow
+      const size = half * 2;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = size;
+      const c = cv.getContext('2d');
+      c.translate(half, half);
+      this._drawLetter(c, type, R, 1);
+      const bmp = { canvas: cv, size: size, R: R };
+      this._cache[type] = bmp;
+      return bmp;
     }
 
     /* Reset every letter to a hidden, offscreen state. */
@@ -181,11 +205,14 @@ window.TTK = window.TTK || {};
         const L = this.letters[i], s = this.state[i];
         const a = gAlpha * s.alpha;
         if (a <= 0.002) continue;
+        const bmp = this._getBitmap(L.type);
+        const drawSize = bmp.size * (h / bmp.R);
         ctx.save();
         ctx.translate(cx + L.baseX * h + s.ox, cy + s.oy);
         ctx.rotate(L.tilt + s.tilt);
         ctx.scale(s.scale, s.scale);
-        this._drawLetter(ctx, L.type, h, a);
+        ctx.globalAlpha = util.clamp(a, 0, 1);   // fade the whole letter as one unit
+        ctx.drawImage(bmp.canvas, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
         ctx.restore();
       }
 

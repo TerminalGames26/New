@@ -145,7 +145,7 @@
           const dy = mode === 'up' ? 28 : (idx % 2 ? 12 : -9);
           glyph.style.setProperty('--dx', dx.toFixed(1) + 'px');
           glyph.style.setProperty('--dy', dy.toFixed(1) + 'px');
-          glyph.style.setProperty('--d', (idx * 0.038).toFixed(3) + 's');
+          glyph.style.setProperty('--d', (idx * 0.03).toFixed(3) + 's');
           // Idle float
           char.style.setProperty('--fy', (-(4 + (idx % 3) * 2)).toFixed(0) + 'px');
           char.style.setProperty('--fd', (idx * 0.13).toFixed(2) + 's');
@@ -349,7 +349,7 @@
        out of it and gently float. */
     _iconScenes(time, md) {
       const size = md * 0.12;
-      const leftX = -this.W * 0.2 / this.cam.zoom;
+      const leftX = -this.W * 0.18 / this.cam.zoom;
       this.cam.tZoom = 1.04;
       this.bloomStrength = 0.55;
       this.sceneIcons = [];
@@ -382,13 +382,15 @@
         if (this.cue(d.name + 'Pop', d.pop)) { this.audio.pop(); this.particles.popBurst(0, 0, d.color); }
         if (this.cue(d.name + 'Slide', d.slide)) this.audio.sparkle();
 
-        // Caption: reveal while the symbol is settled (letters fly out of it).
+        // Caption: reveal only once the symbol has settled on the left, so
+        // the letters stream OUT of it rather than landing on top of it.
         if (d.text) {
-          if (time >= d.textAt && time < d.out) d.text.classList.add('show');
+          const textAt = d.slide + 1.0;
+          if (time >= textAt && time < d.out) d.text.classList.add('show');
           else d.text.classList.remove('show');
-          if (this.cue(d.name + 'Text', d.textAt)) {
+          if (this.cue(d.name + 'Text', textAt)) {
             this.audio.sparkle(); this.audio.glitter();
-            const ix = util.lerp(0, leftX, seg(d.textAt, d.slide, 1.3, util.easeInOutCubic));
+            const ix = util.lerp(0, leftX, seg(textAt, d.slide, 1.3, util.easeInOutCubic));
             this._emitFromIcon(ix, 0);   // sparkles stream out toward the text
           }
         }
