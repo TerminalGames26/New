@@ -129,14 +129,16 @@ window.TTK = window.TTK || {};
       stroke(0, W * 0.15, 'rgba(120,20,70,0.5)', W);
       ctx.restore();
 
-      // 3. 3D extrusion (back -> front) — down-right direction.
-      const depth = W * 0.52, steps = 12;
-      const ex = 0.30, ey = 1.0; // extrusion direction (unnormalised)
+      // 3. 3D extrusion (back -> front) — a short DIAGONAL bevel toward the
+      // lower-right. A shallow down-right offset reads as a chunky 3D edge
+      // instead of a long "drip" line hanging below the letters.
+      const depth = W * 0.32, steps = 10;
+      const ex = 0.62, ey = 0.78; // extrusion direction (unnormalised)
       const en = Math.hypot(ex, ey);
       for (let i = steps; i >= 1; i--) {
         const f = i / steps;
         const mag = depth * f;
-        const col = mix('#6f2049', '#d24f92', 1 - f);
+        const col = mix('#7a2352', '#d24f92', 1 - f);
         stroke((ex / en) * mag, (ey / en) * mag, col, W);
       }
 
@@ -153,12 +155,6 @@ window.TTK = window.TTK || {};
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       stroke(-W * 0.02, -W * 0.3, util.rgba('#ffffff', 0.9), W * 0.11);
-      ctx.restore();
-
-      // 7. Bottom reflection
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      stroke(0, W * 0.3, util.rgba('#ffd9ef', 0.28), W * 0.28);
       ctx.restore();
 
       ctx.restore();

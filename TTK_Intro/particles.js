@@ -110,7 +110,8 @@ window.TTK = window.TTK || {};
     white: '#ffffff',
     gold: '#fff2b0',
     heart: '#ff7ec2',
-    lilac: '#f2c7ff'
+    lilac: '#f2c7ff',
+    blue: '#2b7bff'
   };
   TTK.PALETTE = PALETTE;
 

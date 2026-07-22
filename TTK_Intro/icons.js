@@ -83,26 +83,27 @@ window.TTK = window.TTK || {};
       alpha = alpha == null ? 1 : alpha;
       ctx.save();
       ctx.globalAlpha = util.clamp(alpha, 0, 1);
-      this._glow(ctx, size * 1.7, alpha, P.softPink);
+      this._glow(ctx, size * 1.8, alpha, '#ffdf6b');   // warm golden glow
       ctx.rotate(rot || 0);
 
       const build = (c) => this._starPath(c, size);
-      this._extrude(ctx, build, size * 0.32, 12, '#c23f86', '#ffb3df');
+      this._extrude(ctx, build, size * 0.32, 12, '#a06a05', '#ffcf3d');
 
-      // front face
+      // glossy gold front face
       build(ctx);
       const body = ctx.createRadialGradient(-size * 0.2, -size * 0.3, 0, 0, 0, size);
-      body.addColorStop(0, '#ffffff');
-      body.addColorStop(0.55, '#fff0f9');
-      body.addColorStop(1, '#ffd0ec');
+      body.addColorStop(0, '#fffdf0');
+      body.addColorStop(0.4, '#ffe987');
+      body.addColorStop(0.75, '#ffcf3d');
+      body.addColorStop(1, '#f5a800');
       ctx.fillStyle = body;
       ctx.fill();
 
       // rim + specular
       ctx.lineWidth = size * 0.03;
-      ctx.strokeStyle = util.rgba('#ffffff', 0.8 * alpha);
+      ctx.strokeStyle = util.rgba('#fff7cf', 0.85 * alpha);
       ctx.stroke();
-      ctx.fillStyle = util.rgba('#ffffff', 0.85 * alpha);
+      ctx.fillStyle = util.rgba('#ffffff', 0.9 * alpha);
       ctx.beginPath();
       ctx.ellipse(-size * 0.22, -size * 0.3, size * 0.22, size * 0.12, -0.5, 0, TAU);
       ctx.fill();
@@ -110,17 +111,15 @@ window.TTK = window.TTK || {};
     },
 
     /* --------------------------------------------------------------
-       VERIFIED — scalloped seal badge with a check mark.
+       VERIFIED — blue rounded-square badge, tilted, with a white check.
        -------------------------------------------------------------- */
-    _sealPath(ctx, size) {
-      const bumps = 12, rOut = size, rIn = size * 0.86, steps = bumps * 2;
+    _roundRect(ctx, x, y, w, h, r) {
       ctx.beginPath();
-      for (let i = 0; i <= steps; i++) {
-        const a = (i / steps) * TAU - Math.PI / 2;
-        const rad = i % 2 === 0 ? rOut : rIn;
-        const x = Math.cos(a) * rad, y = Math.sin(a) * rad;
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
       ctx.closePath();
     },
 
@@ -128,53 +127,59 @@ window.TTK = window.TTK || {};
       alpha = alpha == null ? 1 : alpha;
       ctx.save();
       ctx.globalAlpha = util.clamp(alpha, 0, 1);
-      this._glow(ctx, size * 1.7, alpha, P.softPink);
+      this._glow(ctx, size * 1.7, alpha, '#7db0ff');   // cool blue glow
 
-      const build = (c) => this._sealPath(c, size);
-      this._extrude(ctx, build, size * 0.34, 12, '#b53a7e', '#ff9ed6');
+      // Tilt the whole badge slightly, like the reference.
+      ctx.rotate(-0.13);
 
-      // front seal face
+      const s = size * 0.92;                 // half-extent of the square
+      const r = s * 0.42;                    // corner radius (rounded square)
+      const build = (c) => this._roundRect(c, -s, -s, s * 2, s * 2, r);
+
+      // 3D extrusion in blue.
+      this._extrude(ctx, build, size * 0.3, 12, '#0a3ca8', '#2f7bff');
+
+      // Blue glossy front face.
       build(ctx);
-      const body = ctx.createRadialGradient(-size * 0.25, -size * 0.3, 0, 0, 0, size);
-      body.addColorStop(0, '#ffffff');
-      body.addColorStop(0.6, '#fff2fa');
-      body.addColorStop(1, '#ffd2ec');
+      const body = ctx.createLinearGradient(0, -s, 0, s);
+      body.addColorStop(0, '#4d93ff');
+      body.addColorStop(0.5, '#1f74ff');
+      body.addColorStop(1, '#0a58f0');
       ctx.fillStyle = body;
       ctx.fill();
-      ctx.lineWidth = size * 0.03;
-      ctx.strokeStyle = util.rgba('#ffffff', 0.75 * alpha);
-      ctx.stroke();
 
-      // inner tinted disc (saturated so the white check pops)
-      ctx.beginPath();
-      ctx.arc(0, 0, size * 0.62, 0, TAU);
-      const disc = ctx.createLinearGradient(0, -size * 0.6, 0, size * 0.6);
-      disc.addColorStop(0, '#ff9ed6');
-      disc.addColorStop(1, '#ff62b6');
-      ctx.fillStyle = disc;
+      // Soft top sheen.
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const sheen = ctx.createLinearGradient(0, -s, 0, 0);
+      sheen.addColorStop(0, 'rgba(255,255,255,0.35)');
+      sheen.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sheen;
+      build(ctx);
       ctx.fill();
+      ctx.restore();
 
-      // check mark (with a subtle drop for depth)
+      // White check mark (bold, rounded) with a subtle inner shadow.
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.lineWidth = size * 0.16;
-      ctx.strokeStyle = util.rgba('#c23f86', 0.5);
+      ctx.lineWidth = size * 0.19;
+      ctx.strokeStyle = 'rgba(8,50,150,0.35)';
       ctx.beginPath();
-      ctx.moveTo(-size * 0.32, size * 0.06);
-      ctx.lineTo(-size * 0.06, size * 0.34);
-      ctx.lineTo(size * 0.42, -size * 0.28);
+      ctx.moveTo(-size * 0.36, size * 0.04);
+      ctx.lineTo(-size * 0.08, size * 0.34);
+      ctx.lineTo(size * 0.42, -size * 0.30);
       ctx.stroke();
       ctx.strokeStyle = '#ffffff';
       ctx.beginPath();
-      ctx.moveTo(-size * 0.34, size * 0.02);
-      ctx.lineTo(-size * 0.08, size * 0.3);
-      ctx.lineTo(size * 0.4, -size * 0.32);
+      ctx.moveTo(-size * 0.38, size * 0.0);
+      ctx.lineTo(-size * 0.10, size * 0.30);
+      ctx.lineTo(size * 0.40, -size * 0.34);
       ctx.stroke();
 
-      // specular sweep
-      ctx.fillStyle = util.rgba('#ffffff', 0.5 * alpha);
+      // corner specular highlight
+      ctx.fillStyle = util.rgba('#ffffff', 0.4 * alpha);
       ctx.beginPath();
-      ctx.ellipse(-size * 0.28, -size * 0.34, size * 0.34, size * 0.16, -0.6, 0, TAU);
+      ctx.ellipse(-s * 0.42, -s * 0.5, s * 0.5, s * 0.18, -0.5, 0, TAU);
       ctx.fill();
       ctx.restore();
     },

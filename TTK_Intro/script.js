@@ -356,7 +356,7 @@
 
       const defs = [
         { name: 'star', pop: T.creatorPop, slide: T.creatorSlide, out: T.devStart, text: this.texts.creator, textAt: T.creatorText, color: P.gold },
-        { name: 'verified', pop: T.devPop, slide: T.devSlide, out: T.commStart, text: this.texts.developer, textAt: T.devText, color: P.softPink },
+        { name: 'verified', pop: T.devPop, slide: T.devSlide, out: T.commStart, text: this.texts.developer, textAt: T.devText, color: P.blue },
         { name: 'group', pop: T.commPop, slide: T.commSlide, out: T.spiralStart, text: this.texts.community, textAt: T.commText, color: P.softPink }
       ];
 
