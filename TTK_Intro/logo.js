@@ -145,16 +145,27 @@ window.TTK = window.TTK || {};
       // 4. Gradient front face
       stroke(0, 0, grad, W);
 
-      // 5. Inner specular streak (upper-left)
+      // Highlights use a top-fading gradient so the shine sits on the TOP
+      // of each bubble and fades out before the middle — otherwise it runs
+      // the full length of vertical strokes and looks like a line dripping
+      // down the letter.
+      const hiGrad = ctx.createLinearGradient(0, -h * 0.5, 0, -h * 0.02);
+      hiGrad.addColorStop(0, util.rgba('#ffffff', 0.5));
+      hiGrad.addColorStop(1, util.rgba('#ffffff', 0));
+      const rimGrad = ctx.createLinearGradient(0, -h * 0.5, 0, -h * 0.14);
+      rimGrad.addColorStop(0, util.rgba('#ffffff', 0.95));
+      rimGrad.addColorStop(1, util.rgba('#ffffff', 0));
+
+      // 5. Inner specular (upper area only)
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      stroke(-W * 0.08, -W * 0.18, util.rgba('#ffffff', 0.45), W * 0.4);
+      stroke(-W * 0.08, -W * 0.18, hiGrad, W * 0.4);
       ctx.restore();
 
-      // 6. Top rim highlight (the glossy shine line)
+      // 6. Top rim shine
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      stroke(-W * 0.02, -W * 0.3, util.rgba('#ffffff', 0.9), W * 0.11);
+      stroke(-W * 0.02, -W * 0.3, rimGrad, W * 0.11);
       ctx.restore();
 
       ctx.restore();
