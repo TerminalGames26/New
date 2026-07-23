@@ -400,42 +400,28 @@
       ctx.restore();
     }
 
-    /* Persistent cracked craters punched into the floor. */
+    /* Persistent cracks radiating from each impact (no crater circle). */
     _drawCraters(ctx) {
       for (const c of this.craters) {
         const gp = c.t;
-        const r = c.r * gp;
         ctx.save();
-        // dark impact bowl (flattened)
-        const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
-        g.addColorStop(0, 'rgba(0,0,0,0.9)');
-        g.addColorStop(0.7, 'rgba(0,0,0,0.5)');
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.ellipse(c.x, c.y, r, r * 0.34, 0, 0, TAU);
-        ctx.fill();
-        // cracks radiating out (dark) with a faint glossy highlight
         ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         for (const line of c.cracks) {
-          ctx.strokeStyle = 'rgba(0,0,0,' + (0.85 * gp) + ')';
-          ctx.lineWidth = 2.4;
+          // dark crack
+          ctx.strokeStyle = 'rgba(0,0,0,' + (0.9 * gp) + ')';
+          ctx.lineWidth = 2.8;
           ctx.beginPath();
           for (let i = 0; i < line.length; i++) {
             const x = c.x + line[i].x * gp, y = c.y + line[i].y * gp;
             i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
           }
           ctx.stroke();
-          ctx.strokeStyle = 'rgba(150,160,180,' + (0.14 * gp) + ')';
+          // faint glossy edge along the crack
+          ctx.strokeStyle = 'rgba(150,160,180,' + (0.16 * gp) + ')';
           ctx.lineWidth = 1;
           ctx.stroke();
         }
-        // glossy raised rim
-        ctx.strokeStyle = 'rgba(150,162,185,' + (0.22 * gp) + ')';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.ellipse(c.x, c.y, r * 0.98, r * 0.34 * 0.98, 0, 0, TAU);
-        ctx.stroke();
         ctx.restore();
       }
     }
