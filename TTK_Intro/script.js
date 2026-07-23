@@ -55,8 +55,7 @@
       this.audio = new TTK.AudioEngine();
       this.particles = new TTK.ParticleSystem(1200);
       this.logo = new TTK.Logo();
-      this.moon = TTK.Moon;
-      this.moon.load();               // start loading the moon photo now
+      this.floor = TTK.Floor;
 
       this.cam = { zoom: 1.05, x: 0, y: 0, tZoom: 1.0, tx: 0, ty: 0, shake: 0 };
 
@@ -67,7 +66,9 @@
       this._cues = {};
       this._last = 0;
 
-      this.shocks = [];      // expanding collision shockwaves on the moon
+      this.shocks = [];      // expanding collision shockwaves
+      this.craters = [];     // persistent cracked craters on the floor
+      this.pebbles = [];     // flying debris rocks
 
       this.outroText = document.getElementById('outro-text');
       this.startOverlay = document.getElementById('start-overlay');
@@ -155,6 +156,8 @@
       this.finished = false;
       this.particles.clear();
       this.shocks = [];
+      this.craters = [];
+      this.pebbles = [];
       this.logo.resetHidden();
       this.cam.zoom = 1.05; this.cam.x = 0; this.cam.y = 0;
       this.outroText.classList.remove('show');
@@ -194,9 +197,9 @@
       // ---- geometry ----
       const h = md * 0.14;
       this.logoH = h;
-      const surfaceScreenY = this.moon.surfaceY();
-      this.logoCy = (surfaceScreenY - this.H / 2) - h * 0.45;   // base rests on surface
-      this.sceneAlpha = seg(time, 0, 1.8, util.easeOutCubic);
+      this.floorScreenY = this.H * 0.66;                        // glossy floor line
+      this.logoCy = (this.floorScreenY - this.H / 2) - h * 0.45; // base rests on floor
+      this.sceneAlpha = seg(time, 0, 1.5, util.easeOutCubic);
 
       // Gentle camera settle (slow push-in) + drift toward the moon.
       this.cam.tZoom = util.lerp(1.05, 1.0, seg(time, 0, 6, util.easeOutCubic));
@@ -228,11 +231,15 @@
         // ---- landing impact (once) ----
         if (this.cue('drop' + i, ds)) this.audio.dropWhoosh(T.fallDur);
         if (this.cue('land' + i, land)) {
-          const lx = this.logo.letters[i].baseX * h;
-          const ly = this.logoCy + h * 0.45;      // base of the letter = surface
-          this.particles.moonDust(lx, ly, 1.4);
-          this.shocks.push({ x: lx, y: ly, t: 0 });   // collision power expands
-          this.audio.boom(1.1);
+          const lxWorld = this.logo.letters[i].baseX * h;
+          const lyWorld = this.logoCy + h * 0.45;             // base = floor (world)
+          const lxScreen = this.W / 2 + lxWorld * this.cam.zoom;
+          const lyScreen = this.floorScreenY;
+          this.particles.moonDust(lxWorld, lyWorld, 1.1);     // light dust puff
+          this.shocks.push({ x: lxWorld, y: lyWorld, t: 0 }); // shockwave (world)
+          this._spawnCrater(lxScreen, lyScreen, h * this.cam.zoom);
+          this._spawnPebbles(lxScreen, lyScreen);
+          this.audio.boom(1.15);
           this.audio.sparkle();
           this.cam.shake = 1.0;
         }
@@ -259,8 +266,71 @@
         this.shocks[i].t += dt;
         if (this.shocks[i].t > 1.0) this.shocks.splice(i, 1);
       }
+      // grow-in for craters
+      for (const c of this.craters) if (c.t < 1) c.t = Math.min(1, c.t + dt / 0.4);
+      // pebble physics (bounce on the floor, settle)
+      this._updatePebbles(dt);
 
       if (this.cue('replay', T.replayAt)) { this.finished = true; this.replayBtn.classList.add('show'); }
+    }
+
+    /* Punch a cracked crater into the floor at (screen) x,y. */
+    _spawnCrater(x, y, ref) {
+      const r = ref * 0.62;
+      const cracks = [];
+      const n = 6 + (Math.random() * 4 | 0);
+      for (let i = 0; i < n; i++) {
+        let a = (i / n) * TAU + util.rand(-0.3, 0.3);
+        const steps = util.randInt(3, 6);
+        const len = r * util.rand(1.0, 2.0);
+        const pts = [{ x: 0, y: 0 }];
+        let px = 0, py = 0;
+        for (let s = 0; s < steps; s++) {
+          a += util.rand(-0.35, 0.35);
+          const step = len / steps;
+          px += Math.cos(a) * step;
+          py += Math.sin(a) * step * 0.34;   // flatten (floor perspective)
+          pts.push({ x: px, y: py });
+        }
+        cracks.push(pts);
+      }
+      this.craters.push({ x: x, y: y, r: r, cracks: cracks, t: 0 });
+    }
+
+    /* Throw a burst of pebbles/debris out of the impact. */
+    _spawnPebbles(x, y) {
+      const n = 16 + (Math.random() * 6 | 0);
+      for (let i = 0; i < n; i++) {
+        const a = -Math.PI / 2 + util.rand(-1.15, 1.15);
+        const sp = util.rand(120, 540);
+        this.pebbles.push({
+          x: x, y: y,
+          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - util.rand(40, 160),
+          rot: util.rand(0, TAU), vr: util.rand(-12, 12),
+          size: util.rand(2.5, 8), shade: util.rand(0.14, 0.4),
+          floor: y, bounces: 0, life: util.rand(1.4, 2.6), rest: false
+        });
+      }
+    }
+
+    _updatePebbles(dt) {
+      const G = 1500;
+      for (let i = this.pebbles.length - 1; i >= 0; i--) {
+        const p = this.pebbles[i];
+        if (!p.rest) {
+          p.vy += G * dt;
+          p.x += p.vx * dt; p.y += p.vy * dt;
+          p.rot += p.vr * dt;
+          if (p.y >= p.floor && p.vy > 0) {
+            p.y = p.floor;
+            p.bounces++;
+            if (p.bounces > 2 || Math.abs(p.vy) < 60) { p.vy = 0; p.vx *= 0.4; p.vr *= 0.3; p.rest = true; }
+            else { p.vy *= -0.42; p.vx *= 0.6; p.vr *= 0.5; }
+          }
+        }
+        p.life -= dt;
+        if (p.life <= 0) this.pebbles.splice(i, 1);
+      }
     }
 
     /* =================================================================
@@ -276,21 +346,23 @@
       const shakeX = (Math.random() - 0.5) * this.cam.shake * 7;
       const shakeY = (Math.random() - 0.5) * this.cam.shake * 7;
 
-      // --- backdrop: the lunar-surface photo (screen space, gentle shake) ---
+      // --- glossy floor + crater marks (screen space, gentle shake) ---
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       ctx.save();
       ctx.translate(shakeX, shakeY);
       ctx.globalAlpha = util.clamp(this.sceneAlpha, 0, 1);
-      this.moon.draw(ctx, this.W, this.H);
+      this.floor.draw(ctx, this.W, this.H, this.floorScreenY);
       ctx.globalAlpha = 1;
+      this._drawCraters(ctx);
       ctx.restore();
 
-      // --- world (camera space): shockwaves, letters, dust ---
+      // --- world (camera space): reflection, shockwaves, letters, dust ---
       ctx.save();
       ctx.translate(this.W / 2 + shakeX, this.H / 2 + shakeY);
       ctx.scale(this.cam.zoom, this.cam.zoom);
       ctx.translate(-this.cam.x, -this.cam.y);
 
+      this._drawReflection(ctx);
       this._drawShocks(ctx);
 
       if (this.logoH) {
@@ -299,10 +371,107 @@
       }
 
       this.particles.render(ctx);
+      ctx.restore();
 
+      // --- pebbles / debris (screen space, over the floor + letters) ---
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+      this._drawPebbles(ctx);
       ctx.restore();
 
       this._bloomPass();
+    }
+
+    /* Faded, mirrored reflection of the letters on the glossy floor. */
+    _drawReflection(ctx) {
+      if (this.sceneAlpha < 0.05 || !this.logoH) return;
+      const floorWY = this.floorScreenY - this.H / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(-this.W, floorWY, this.W * 2, this.H);
+      ctx.clip();
+      ctx.translate(0, 2 * floorWY);
+      ctx.scale(1, -1);
+      this.logo.draw(ctx, { cx: 0, cy: this.logoCy, height: this.logoH, alpha: 0.24 * this.sceneAlpha });
+      ctx.restore();
+      // fade the reflection into the floor
+      ctx.save();
+      const g = ctx.createLinearGradient(0, floorWY, 0, floorWY + this.H * 0.45);
+      g.addColorStop(0, 'rgba(6,7,9,0)');
+      g.addColorStop(1, 'rgba(6,7,9,0.92)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-this.W, floorWY, this.W * 2, this.H * 0.45);
+      ctx.restore();
+    }
+
+    /* Persistent cracked craters punched into the floor. */
+    _drawCraters(ctx) {
+      for (const c of this.craters) {
+        const gp = c.t;
+        const r = c.r * gp;
+        ctx.save();
+        // dark impact bowl (flattened)
+        const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+        g.addColorStop(0, 'rgba(0,0,0,0.9)');
+        g.addColorStop(0.7, 'rgba(0,0,0,0.5)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(c.x, c.y, r, r * 0.34, 0, 0, TAU);
+        ctx.fill();
+        // cracks radiating out (dark) with a faint glossy highlight
+        ctx.lineCap = 'round';
+        for (const line of c.cracks) {
+          ctx.strokeStyle = 'rgba(0,0,0,' + (0.85 * gp) + ')';
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          for (let i = 0; i < line.length; i++) {
+            const x = c.x + line[i].x * gp, y = c.y + line[i].y * gp;
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(150,160,180,' + (0.14 * gp) + ')';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        // glossy raised rim
+        ctx.strokeStyle = 'rgba(150,162,185,' + (0.22 * gp) + ')';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(c.x, c.y, r * 0.98, r * 0.34 * 0.98, 0, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    /* Small dark rocks with a lit top edge + soft floor shadow. */
+    _drawPebbles(ctx) {
+      for (const p of this.pebbles) {
+        const a = util.clamp(p.life, 0, 1);
+        const g = (p.shade * 255) | 0;
+        // soft contact shadow when near the floor
+        if (p.y >= p.floor - p.size * 2) {
+          ctx.fillStyle = 'rgba(0,0,0,' + (0.35 * a) + ')';
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.floor + 1, p.size * 1.6, p.size * 0.5, 0, 0, TAU);
+          ctx.fill();
+        }
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = 'rgb(' + g + ',' + (g + 2) + ',' + (g + 6) + ')';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.size, p.size * 0.8, 0, 0, TAU);
+        ctx.fill();
+        // lit top edge
+        ctx.fillStyle = 'rgba(190,198,214,0.6)';
+        ctx.beginPath();
+        ctx.ellipse(-p.size * 0.2, -p.size * 0.3, p.size * 0.4, p.size * 0.22, -0.5, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
     }
 
     /* Expanding collision shockwaves — flattened rings that ripple out

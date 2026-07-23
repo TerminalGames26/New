@@ -1,17 +1,17 @@
 # TTK Intro 🌙
 
-A cinematic **night-sky / moon** intro built with nothing but **HTML, CSS,
-Canvas, JavaScript and the Web Audio API**. No libraries. No GSAP. No
-Three.js. No frameworks. No npm. No build tools. The only asset is the
-`moon.png` backdrop photo; the letters and every sound are generated
-procedurally in code. Just open the file and it plays.
+A cinematic intro built with nothing but **HTML, CSS, Canvas, JavaScript
+and the Web Audio API**. No libraries. No GSAP. No Three.js. No frameworks.
+No npm. No build tools. No image or audio assets — everything (the floor,
+the letters, the debris and every sound) is generated in code. Just open
+the file and it plays.
 
-> A photographic **lunar surface** (`moon.png`) stretches to the horizon
-> under a starry sky. The three **TTK** letters — brushed silver
-> metal with a glowing white edge — drop in one at a time and slam into the
-> moon, each landing with a **boom**, a **moon-dust plume** and an
-> **expanding collision shockwave**. It settles into the finished logo with
-> a metal shine, then **“Join TTK Today — .gg/ttk”** fades in.
+> A **glossy black floor** reflects the scene under a dark studio backdrop.
+> The three **TTK** letters — polished chrome metal — drop in one at a time
+> and slam into the floor, each landing with a **boom**, a **dust puff**, a
+> burst of **flying pebbles** and a **cracked crater** punched into the
+> surface. It settles into the finished logo with a metal shine, then
+> **“Join TTK Today — .gg/ttk”** fades in over the reflection.
 
 ---
 
@@ -33,10 +33,10 @@ plain classic scripts (no ES modules) so there are no CORS issues.
 
 | Phase | What happens |
 | ----- | ------------ |
-| **Sky** | A smooth fade reveals the dark starry sky and the realistic cratered moon surface receding to the horizon. |
-| **Drops** | The three glossy silver-metal letters drop from above, one at a time at a steady pace, stretching as they accelerate. |
-| **Impact** | Each letter slams into the moon: a landing **boom**, a **moon-dust plume**, an **expanding shockwave ring** across the surface, a squash-and-settle bounce and a small camera shake. |
-| **Logo** | TTK stands assembled on the moon; a bright metal shine sweeps across it. |
+| **Floor** | A smooth fade reveals the glossy black floor with its reflective sheen and horizon edge. |
+| **Drops** | The three chrome-metal letters drop from above, one at a time at a steady pace, stretching as they accelerate. |
+| **Impact** | Each letter slams into the floor: a landing **boom**, a **dust puff**, a burst of **flying pebbles**, a **cracked crater** punched into the surface, an expanding shockwave ring, a squash-and-settle bounce and a camera shake. |
+| **Logo** | TTK stands assembled on the floor (mirrored in the gloss); a metal shine sweeps across it. |
 | **Outro** | *“Join TTK Today / .gg/ttk”* fades in. |
 
 ---
@@ -48,8 +48,7 @@ TTK_Intro/
 ├── index.html      Page structure, canvas + overlays, script load order
 ├── style.css       Night-sky background, outro text, start/replay/mute UI
 ├── particles.js    Shared math/easing utils + particle engine (moon dust)
-├── icons.js        Moon backdrop (loads + cover-fits moon.png)
-├── moon.png        Photographic lunar-surface backdrop
+├── icons.js        The glossy black floor renderer
 ├── logo.js         Programmatic silver-metal 3D bubble letters (glowing edge)
 ├── audio.js        Fully procedural sound + night-sky background music
 ├── script.js       Main orchestrator: timeline, drops, shockwaves, render
@@ -63,19 +62,22 @@ global `TTK` namespace and the shared math/easing helpers (`TTK.util`).
 
 ## 🔧 How it works
 
-### The moon (`icons.js`)
-The backdrop is the supplied photographic lunar-surface image (`moon.png`),
-loaded once and drawn **cover-fit** (fills the viewport, centred, no
-distortion) behind the scene. The photo already contains the sky, stars,
-horizon and distant Earth, so the letters simply drop and land on the
-foreground surface. `horizonY()` / `surfaceY()` expose the screen fractions
-the scene director uses to place the landing height.
+### The floor, craters & pebbles
+- **Floor (`icons.js`):** a dark reflective gradient with a soft central
+  sheen and a bright glossy horizon edge.
+- **Reflection:** the letters are re-drawn mirrored below the horizon,
+  faded and blended into the floor, for the glossy mirror look.
+- **Craters:** each impact punches a persistent flattened crater with
+  procedurally generated radial **cracks** into the floor.
+- **Pebbles:** each impact throws a burst of little dark rocks that fly out,
+  fall under gravity and **bounce** to rest on the floor (plus a light dust
+  puff from the particle system).
 
 ### The letters (`logo.js`)
 Not text. Each letter is thick round-capped stroke segments rendered in
-layered passes — outer white glow, contact shadow, a dark 3D **extruded
-bevel**, a **glowing white edge**, the **brushed-silver face** and top
-specular — then baked to a bitmap and dropped / squashed / faded as one unit.
+layered passes — contact shadow, a dark 3D **extruded bevel**, a polished
+**chrome face** and a crisp top-edge highlight — then baked to a bitmap and
+dropped / squashed / faded as one unit.
 
 ### Motion & polish (`script.js`)
 - One `requestAnimationFrame` loop with a delta-time clamp (no jank).

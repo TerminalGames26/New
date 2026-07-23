@@ -1,13 +1,10 @@
 /* =====================================================================
    TTK Intro — icons.js
    ---------------------------------------------------------------------
-   The moon backdrop. Uses the supplied photographic lunar-surface image
-   (moon.png) drawn cover-fit behind the scene. The image already contains
-   the starry sky, horizon and surface, so the letters simply drop and land
-   on the foreground surface.
-
-   Exposes horizonY() / surfaceY() as screen fractions the scene director
-   uses to place the stars-free sky line and the letter landing height.
+   The glossy black floor the letters land on. A dark reflective plane in
+   the lower part of the frame with a soft sheen and a bright glossy edge
+   at the horizon line. Reflections, impact craters/cracks and pebbles are
+   drawn by the scene director on top of this.
    ===================================================================== */
 
 window.TTK = window.TTK || {};
@@ -15,34 +12,42 @@ window.TTK = window.TTK || {};
 (function (TTK) {
   'use strict';
 
-  const Moon = {
-    img: null,
-    ready: false,
-    _w: 0, _h: 0,
+  const Floor = {
+    /* Draw the glossy black floor from `floorY` down to the bottom. */
+    draw(ctx, w, h, floorY) {
+      const fh = h - floorY;
 
-    /* Kick off loading immediately (well before the user taps to start). */
-    load() {
-      if (this.img) return;
-      this.img = new Image();
-      this.img.onload = () => { this.ready = true; };
-      this.img.src = 'moon.png';
-    },
+      // Base floor gradient (near-black, slightly lifted near the horizon).
+      const g = ctx.createLinearGradient(0, floorY, 0, h);
+      g.addColorStop(0, '#16171c');
+      g.addColorStop(0.22, '#0b0c10');
+      g.addColorStop(1, '#040405');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, floorY, w, fh);
 
-    /* Draw the photo cover-fit (fills the viewport, centred, no distortion). */
-    draw(ctx, w, h) {
-      this._w = w; this._h = h;
-      if (!this.ready) return;
-      const iw = this.img.width, ih = this.img.height;
-      const s = Math.max(w / iw, h / ih);
-      const dw = iw * s, dh = ih * s;
-      ctx.drawImage(this.img, (w - dw) / 2, (h - dh) / 2, dw, dh);
-    },
+      // Soft central sheen (the "glossy" reflection of the light).
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const sheen = ctx.createRadialGradient(w / 2, floorY + fh * 0.12, 0, w / 2, floorY + fh * 0.12, w * 0.55);
+      sheen.addColorStop(0, 'rgba(120,140,175,0.12)');
+      sheen.addColorStop(1, 'rgba(120,140,175,0)');
+      ctx.fillStyle = sheen;
+      ctx.fillRect(0, floorY, w, fh);
+      ctx.restore();
 
-    /* Sky/surface reference lines (screen fractions tuned to the photo). */
-    horizonY() { return (this._h || window.innerHeight) * 0.30; },
-    surfaceY() { return (this._h || window.innerHeight) * 0.66; }
+      // Bright glossy edge along the horizon line.
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const edge = ctx.createLinearGradient(0, floorY - 3, 0, floorY + 10);
+      edge.addColorStop(0, 'rgba(190,200,220,0)');
+      edge.addColorStop(0.4, 'rgba(190,200,220,0.35)');
+      edge.addColorStop(1, 'rgba(190,200,220,0)');
+      ctx.fillStyle = edge;
+      ctx.fillRect(0, floorY - 3, w, 13);
+      ctx.restore();
+    }
   };
 
-  TTK.Moon = Moon;
+  TTK.Floor = Floor;
 
 })(window.TTK);

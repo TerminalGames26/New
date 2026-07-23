@@ -94,12 +94,15 @@ window.TTK = window.TTK || {};
       const segs = GEOMETRY[type];
       const W = h * 0.27;
 
-      // Brushed silver metal front face (matte, light-top gradient).
+      // Polished chrome front face — reflective, with a bright mid band so
+      // it reads as clean glossy metal on the dark floor.
       const grad = ctx.createLinearGradient(0, -h * 0.5, 0, h * 0.5);
-      grad.addColorStop(0.00, '#c8cbcf');
-      grad.addColorStop(0.35, '#a3a6ac');
-      grad.addColorStop(0.62, '#84878d');
-      grad.addColorStop(1.00, '#5d6066');
+      grad.addColorStop(0.00, '#e2e5e9');
+      grad.addColorStop(0.28, '#7f838b');
+      grad.addColorStop(0.48, '#cfd2d7');
+      grad.addColorStop(0.60, '#9a9ea5');
+      grad.addColorStop(0.80, '#4e5158');
+      grad.addColorStop(1.00, '#303339');
 
       const stroke = (offx, offy, style, width) => {
         ctx.lineCap = 'round';
@@ -120,63 +123,37 @@ window.TTK = window.TTK || {};
       ctx.save();
       ctx.globalAlpha = util.clamp(alpha, 0, 1);
 
-      // 1. Soft outer white glow (the neon-edge halo around the letter)
+      // 1. Contact shadow (grounds the letter on the floor)
       ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.shadowColor = 'rgba(255,255,255,0.9)';
-      ctx.shadowBlur = W * 1.3;
-      stroke(0, 0, 'rgba(255,255,255,0.28)', W * 1.06);
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = W * 0.7;
+      ctx.shadowOffsetY = W * 0.4;
+      stroke(0, W * 0.14, 'rgba(0,0,0,0.55)', W);
       ctx.restore();
 
-      // 2. Contact shadow (shows where it lands on the bright moon)
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.55)';
-      ctx.shadowBlur = W * 0.8;
-      ctx.shadowOffsetY = W * 0.45;
-      stroke(0, W * 0.15, 'rgba(0,0,0,0.55)', W);
-      ctx.restore();
-
-      // 3. 3D extrusion — short diagonal lower-right bevel
+      // 2. 3D extrusion — short diagonal lower-right bevel (dark metal sides)
       const depth = W * 0.34, steps = 10;
       const ex = 0.62, ey = 0.78, en = Math.hypot(ex, ey);
       for (let i = steps; i >= 1; i--) {
         const f = i / steps;
         const mag = depth * f;
-        const col = mix('#2a2c31', '#585b62', 1 - f);
+        const col = mix('#24262b', '#50535a', 1 - f);
         stroke((ex / en) * mag, (ey / en) * mag, col, W);
       }
 
-      // 3b. Glowing white edge — a bright rim slightly wider than the face
-      // that reads as the lit outline around the letter (as in the ref).
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.shadowColor = 'rgba(255,255,255,0.95)';
-      ctx.shadowBlur = W * 0.5;
-      stroke(0, 0, '#ffffff', W * 1.14);
-      ctx.restore();
-
-      // 4. Metallic silver front face (covers the centre, leaving the rim)
+      // 3. Chrome front face
       stroke(0, 0, grad, W);
 
-      // Highlights fade out below the top so vertical strokes don't get a
-      // full-length line.
-      const hiGrad = ctx.createLinearGradient(0, -h * 0.5, 0, -h * 0.02);
-      hiGrad.addColorStop(0, util.rgba('#ffffff', 0.32));
+      // Crisp top-edge highlight (fades out below the top so the vertical
+      // strokes never get a full-length "white line").
+      const hiGrad = ctx.createLinearGradient(0, -h * 0.5, 0, -h * 0.06);
+      hiGrad.addColorStop(0, util.rgba('#ffffff', 0.85));
       hiGrad.addColorStop(1, util.rgba('#ffffff', 0));
-      const rimGrad = ctx.createLinearGradient(0, -h * 0.5, 0, -h * 0.14);
-      rimGrad.addColorStop(0, util.rgba('#ffffff', 1));
-      rimGrad.addColorStop(1, util.rgba('#ffffff', 0));
 
-      // 5. Inner specular streak (upper area only)
+      // 4. Thin bright rim along the very top edge only (clean, not a halo)
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      stroke(-W * 0.08, -W * 0.18, hiGrad, W * 0.42);
-      ctx.restore();
-
-      // 6. Top rim shine (sharp metal highlight)
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      stroke(-W * 0.02, -W * 0.3, rimGrad, W * 0.12);
+      stroke(-W * 0.02, -W * 0.34, hiGrad, W * 0.1);
       ctx.restore();
 
       ctx.restore();
