@@ -34,10 +34,10 @@ plain classic scripts (no ES modules) so there are no CORS issues.
 | Phase | What happens |
 | ----- | ------------ |
 | **Floor** | A smooth fade reveals the glossy black floor with its reflective sheen and horizon edge. |
-| **Drops** | The three chrome-metal letters drop from above, one at a time at a steady pace, stretching as they accelerate. |
-| **Impact** | Each letter slams into the floor: a landing **boom**, a soft **dust cloud**, a burst of **chunky flying pebbles**, a **cracked crater** punched into the surface, a squash-and-settle bounce and a camera shake. |
-| **Logo** | TTK stands assembled on the floor (mirrored in the gloss); a metal shine sweeps across it. |
-| **Outro** | *“Join TTK Today / .gg/ttk”* fades in. |
+| **Drops** | The three flat 2D metal letters drop from above, one at a time at a steady pace, stretching as they accelerate. |
+| **Impact** | Each letter hits the floor: a landing **boom**, a soft **dust cloud**, a burst of **chunky flying pebbles**, radial **cracks** in the surface, a squash-and-settle bounce and a camera shake. |
+| **Heart** | TTK **bursts into white sparkles** that fly out and smoothly gather into a glowing **heart** floating above the floor. |
+| **Outro** | *“Join TTK Today / .gg/ttk”* fades in smoothly, letter by letter. |
 
 ---
 
@@ -75,10 +75,11 @@ global `TTK` namespace and the shared math/easing helpers (`TTK.util`).
   so it settles realistically instead of flashing white).
 
 ### The letters (`logo.js`)
-Not text. Each letter is thick round-capped stroke segments rendered in
-layered passes — contact shadow, a dark 3D **extruded bevel**, a polished
-**chrome face** and a crisp top-edge highlight — then baked to a bitmap and
-dropped / squashed / faded as one unit.
+Not text. Each letter is thick round-capped stroke segments drawn as a flat
+2D metal shape (a soft drop shadow + a single smooth metal gradient), then
+baked to a bitmap and dropped / squashed / faded as one unit. On the finale
+they burst into white sparkles that home to the points of a parametric
+**heart** curve.
 
 ### Motion & polish (`script.js`)
 - One `requestAnimationFrame` loop with a delta-time clamp (no jank).

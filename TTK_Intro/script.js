@@ -26,12 +26,12 @@
      Timeline (seconds).
      ------------------------------------------------------------------- */
   const T = {
-    fallDur: 1.25,                       // how long each letter falls (steady)
-    dropStart: [1.9, 3.85, 5.8],         // when each letter begins to drop
+    fallDur: 1.5,                        // how long each letter falls (slower)
+    dropStart: [2.2, 4.7, 7.2],          // when each letter begins to drop
     get dropLand() { return this.dropStart.map((d) => d + this.fallDur); },
-    shine: 7.2,
-    textIn: 7.9,
-    replayAt: 11.5
+    explode: 9.9,                        // TTK bursts into a heart of sparkles
+    textIn: 11.9,                        // "Join TTK Today" fades in
+    replayAt: 16.5
   };
 
   function seg(time, delay, dur, ease) {
@@ -68,6 +68,7 @@
 
       this.craters = [];     // persistent cracked craters on the floor
       this.pebbles = [];     // flying debris rocks
+      this.heart = null;     // heart of white sparkles (finale)
 
       this.outroText = document.getElementById('outro-text');
       this.startOverlay = document.getElementById('start-overlay');
@@ -156,6 +157,7 @@
       this.particles.clear();
       this.craters = [];
       this.pebbles = [];
+      this.heart = null;
       this.logo.resetHidden();
       this.cam.zoom = 1.05; this.cam.x = 0; this.cam.y = 0;
       this.outroText.classList.remove('show');
@@ -241,15 +243,16 @@
         }
       }
 
-      // ---- shine + outro text ----
-      if (this.cue('shine', T.shine)) this.audio.shimmer(1.8);
-      if (this.cue('text', T.textIn)) { this.audio.chime(); this.audio.sparkle(); }
+      // ---- explode TTK into a heart of white sparkles ----
+      if (this.cue('explode', T.explode)) this._explodeToHeart();
+      if (time >= T.explode) this._maintainHeart();
+
+      // ---- outro text (smooth per-letter fade-in) ----
+      if (this.cue('text', T.textIn)) { this.audio.shimmer(1.6); this.audio.sparkle(); }
       if (time >= T.textIn) this.outroText.classList.add('show');
 
-      // metal shine sweep flag (used in render)
-      this.shineP = seg(time, T.shine, 0.9, util.easeInOutCubic);
-
       this.bloomStrength = util.lerp(0.08, 0.14, this.sceneAlpha);
+      if (time >= T.explode) this.bloomStrength = 0.3;   // glow for the sparkle heart
 
       // Music intensity: quiet + moody, small lift once the logo is up.
       let mi = 0.28;
@@ -359,13 +362,15 @@
       ctx.scale(this.cam.zoom, this.cam.zoom);
       ctx.translate(-this.cam.x, -this.cam.y);
 
-      this._drawReflection(ctx);
-
-      if (this.logoH) {
-        this.logo.draw(ctx, { cx: 0, cy: this.logoCy, height: this.logoH, alpha: this.sceneAlpha });
-        this._drawShine(ctx);
+      // Letters + their reflection only exist before the explosion.
+      if (this.time < T.explode) {
+        this._drawReflection(ctx);
+        if (this.logoH) {
+          this.logo.draw(ctx, { cx: 0, cy: this.logoCy, height: this.logoH, alpha: this.sceneAlpha });
+        }
       }
 
+      this._drawHeart(ctx);
       this.particles.render(ctx);
       ctx.restore();
 
@@ -465,21 +470,77 @@
     }
 
 
-    /* A bright metal shine that sweeps across the finished logo once. */
-    _drawShine(ctx) {
-      if (this.shineP <= 0 || this.shineP >= 1) return;
+    /* Burst the logo into white sparkles, then set up the heart outline the
+       sparkles smoothly gather into. */
+    _explodeToHeart() {
       const h = this.logoH;
-      const x0 = -h * 2.4, x1 = h * 2.4;
-      const x = util.lerp(x0, x1, this.shineP);
+      const cx = 0, cy = this.logoCy - h * 0.55;   // float the heart above the floor
+
+      // white sparkle burst out of the logo
+      for (let i = 0; i < 150; i++) {
+        const a = util.rand(0, TAU), sp = util.rand(140, 680);
+        this.particles.spawn({
+          type: util.pick(['spark', 'glitter', 'glow']),
+          color: '#ffffff',
+          x: util.rand(-h * 1.3, h * 1.3), y: this.logoCy + util.rand(-h * 0.45, h * 0.45),
+          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          grav: 0, drag: 0.9, size: util.rand(5, 13), sizeEnd: util.rand(1, 4),
+          life: util.rand(0.8, 1.8), vr: util.rand(-6, 6),
+          twinkle: util.rand(0.3, 0.8), trail: true, fadeOut: 0.5
+        });
+      }
+
+      // heart-outline anchor points (each sparkle flies in from a scatter)
+      const s = h * 0.062, N = 84, anchors = [];
+      for (let i = 0; i < N; i++) {
+        const t = (i / N) * TAU;
+        const hx = 16 * Math.pow(Math.sin(t), 3);
+        const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        const aa = util.rand(0, TAU), rr = util.rand(h * 0.4, h * 2.4);
+        anchors.push({
+          px: cx + hx * s, py: cy - hy * s,
+          sx: cx + Math.cos(aa) * rr, sy: cy + Math.sin(aa) * rr,
+          ph: Math.random() * TAU, size: util.rand(6, 11)
+        });
+      }
+      this.heart = { cx: cx, cy: cy, anchors: anchors, t0: this.time };
+
+      this.audio.boom(1.0);
+      this.audio.glitter();
+      this.audio.shimmer(1.8);
+      this.cam.shake = 0.8;
+    }
+
+    /* Keep a few white sparkles floating around the heart. */
+    _maintainHeart() {
+      if (!this.heart || Math.random() > 0.5) return;
+      const an = util.pick(this.heart.anchors);
+      this.particles.spawn({
+        type: 'spark', color: '#ffffff',
+        x: an.px + util.rand(-12, 12), y: an.py + util.rand(-12, 12),
+        vx: util.rand(-14, 14), vy: util.rand(-26, -4),
+        size: util.rand(3, 7), sizeEnd: 1, life: util.rand(1, 2.2),
+        twinkle: util.rand(0.5, 1)
+      });
+    }
+
+    /* Draw the heart of white sparkles smoothly assembling from the burst. */
+    _drawHeart(ctx) {
+      if (!this.heart) return;
+      const formP = seg(this.time, this.heart.t0, 1.6, util.easeOutExpo);
+      const sprite = TTK.SpriteFactory.get('spark', '#ffffff');
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const g = ctx.createLinearGradient(x - h * 0.5, 0, x + h * 0.5, 0);
-      g.addColorStop(0, 'rgba(255,255,255,0)');
-      g.addColorStop(0.5, 'rgba(255,255,255,0.5)');
-      g.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(x - h * 0.5, this.logoCy - h * 0.7, h, h * 1.4);
+      for (const an of this.heart.anchors) {
+        const x = util.lerp(an.sx, an.px, formP);
+        const y = util.lerp(an.sy, an.py, formP);
+        const tw = 0.5 + 0.5 * Math.sin(an.ph + this.time * 3);
+        ctx.globalAlpha = formP * (0.55 + 0.45 * tw) * this.sceneAlpha;
+        const d = an.size * (0.8 + 0.5 * tw);
+        ctx.drawImage(sprite, x - d, y - d, d * 2, d * 2);
+      }
       ctx.restore();
+      ctx.globalAlpha = 1;
     }
 
     _bloomPass() {

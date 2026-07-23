@@ -52,9 +52,9 @@ window.TTK = window.TTK || {};
   class Logo {
     constructor() {
       this.letters = [
-        { type: 'T', baseX: -1.06, tilt: 0 },
+        { type: 'T', baseX: -1.24, tilt: 0 },
         { type: 'T', baseX: 0.0, tilt: 0 },
-        { type: 'K', baseX: 1.04, tilt: 0 }
+        { type: 'K', baseX: 1.2, tilt: 0 }
       ];
       this.state = this.letters.map(() => ({
         ox: 0, oy: 0, scale: 1, scaleX: 1, scaleY: 1, alpha: 1, tilt: 0
@@ -121,26 +121,15 @@ window.TTK = window.TTK || {};
       ctx.save();
       ctx.globalAlpha = util.clamp(alpha, 0, 1);
 
-      // 1. Contact shadow (grounds the letter on the floor)
+      // Soft drop shadow so the flat letter still grounds on the floor.
       ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.6)';
-      ctx.shadowBlur = W * 0.7;
-      ctx.shadowOffsetY = W * 0.4;
-      stroke(0, W * 0.14, 'rgba(0,0,0,0.55)', W);
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = W * 0.5;
+      ctx.shadowOffsetY = W * 0.22;
+      stroke(0, W * 0.1, 'rgba(0,0,0,0.4)', W);
       ctx.restore();
 
-      // 2. 3D extrusion — a modest diagonal lower-right bevel (enough depth
-      // to read as solid metal, without bulging out in front).
-      const depth = W * 0.28, steps = 12;
-      const ex = 0.6, ey = 0.8, en = Math.hypot(ex, ey);
-      for (let i = steps; i >= 1; i--) {
-        const f = i / steps;
-        const mag = depth * f;
-        const col = mix('#131418', '#494c53', 1 - f);
-        stroke((ex / en) * mag, (ey / en) * mag, col, W);
-      }
-
-      // 3. Smooth metal front face (one clean gradient — no highlight lines)
+      // Flat 2D metal face (a single smooth gradient — no 3D extrusion)
       stroke(0, 0, grad, W);
 
       ctx.restore();
