@@ -88,11 +88,11 @@ dropped / squashed / faded as one unit.
   shake, a twinkling starfield and a subtle additive bloom pass.
 
 ### Audio (`audio.js`)
-Everything is synthesised live and sent through a procedural reverb: a
-falling **whoosh** per drop, a deep **landing boom**, sparkles and a final
-shimmer, plus a slow, moody **background music** bed (a night-sky chord
-progression with pad, sub bass and sparse bell accents) whose intensity is
-driven by the timeline.
+Everything is synthesised live: a falling **whoosh** per drop, a deep
+**landing boom**, sparkles and a final shimmer, plus an **8-bit chiptune**
+background track — a square-wave lead arpeggio and chip chord, an NES-style
+triangle bass, noise hi-hats and a square kick over an upbeat I–V–vi–IV
+progression — whose intensity is driven by the timeline.
 
 ---
 

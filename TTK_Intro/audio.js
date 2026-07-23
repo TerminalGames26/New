@@ -25,13 +25,13 @@ window.TTK = window.TTK || {};
 
   const util = TTK.util;
 
-  /* Moody, cinematic night-sky progression (vi–IV–I–V in C = Am F C G).
-     Each entry is one bar: a sub-bass root and a chord voicing. */
+  /* Upbeat chiptune progression (I–V–vi–IV in C = C G Am F).
+     Each entry is one bar: a bass root and a chord voicing. */
   const PROG = [
-    { bass: 55.00, notes: [220.00, 261.63, 329.63] }, // Am : A3 C4 E4
-    { bass: 43.65, notes: [220.00, 261.63, 349.23] }, // F  : A3 C4 F4
-    { bass: 65.41, notes: [196.00, 261.63, 329.63] }, // C  : G3 C4 E4
-    { bass: 49.00, notes: [246.94, 293.66, 392.00] }  // G  : B3 D4 G4
+    { bass: 65.41, notes: [261.63, 329.63, 392.00] }, // C  : C4 E4 G4
+    { bass: 98.00, notes: [246.94, 293.66, 392.00] }, // G  : B3 D4 G4
+    { bass: 110.00, notes: [220.00, 261.63, 329.63] }, // Am : A3 C4 E4
+    { bass: 87.31, notes: [220.00, 261.63, 349.23] }  // F  : A3 C4 F4
   ];
   const ARP_SEQ = [0, 1, 2, 1, 2, 1, 0, 2]; // which chord tone per 8th note
 
@@ -48,7 +48,7 @@ window.TTK = window.TTK || {};
       this._scheduler = null;
       this._nextNoteTime = 0;
       this._pos = 0;
-      this.bpm = 68;              // slow + cinematic for the night sky
+      this.bpm = 112;             // brisk chiptune tempo
     }
 
     /* Create / resume the context (call from a user gesture). */
@@ -431,36 +431,35 @@ window.TTK = window.TTK || {};
       const inten = this._intensity;
       const beat = (60 / this.bpm);
 
-      if (step === 0) {
-        this._playPad(chord, t, beat * 4 * 0.98, inten);
-        this._playBass(chord.bass, t, beat * 4 * 0.98);
-        this._bell(chord.notes[2] * 2, t, 1.6, 0.05 + 0.03 * inten, this.musicGain);
-      }
+      // sustained square "chip" chord at the top of each bar
+      if (step === 0) this._playPad(chord, t, beat * 4 * 0.96, inten);
+      // triangle bass on beats 1 and 3 (NES-style)
+      if (step === 0 || step === 4) this._playBass(chord.bass, t, beat * 1.7);
 
-      // sparkling arpeggio (grows with intensity)
-      const f = chord.notes[ARP_SEQ[step]] * 2; // an octave up = twinkly
-      this._playArp(f, t, 0.02 + 0.055 * inten);
+      // square-wave lead arpeggio (grows with intensity)
+      const f = chord.notes[ARP_SEQ[step]] * 2;   // an octave up
+      this._playArp(f, t, 0.03 + 0.06 * inten);
 
-      // gentle pulse on the quarter notes once things get intense
-      if (step % 2 === 0 && inten > 0.42) this._playKick(t, (inten - 0.42) / 0.58);
+      // 8-bit percussion: kick on the beat, noise hat on the offbeats
+      if (step % 4 === 0 && inten > 0.34) this._playKick(t, 0.6 + 0.4 * inten);
+      if (step % 2 === 1 && inten > 0.4) this._playHat(t, 0.5 * inten);
     }
 
     _playPad(chord, t, dur, inten) {
-      const lp = this.ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 600 + 2600 * inten;
-      lp.connect(this.musicGain);
-      this._reverb(lp, 0.35);
-      chord.notes.forEach((f, i) => {
+      // quiet sustained square chord (root + fifth) — the chip harmony bed
+      const voices = [chord.notes[0], chord.notes[2]];
+      voices.forEach((f) => {
         const o = this.ctx.createOscillator();
         const g = this.ctx.createGain();
-        o.type = 'triangle';
-        o.frequency.value = f * (i === 1 ? 1.004 : 1); // slight detune shimmer
+        o.type = 'square';
+        o.frequency.value = f;
+        const v = 0.02 + 0.012 * inten;
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.linearRampToValueAtTime(0.05, t + 0.5);
-        g.gain.setValueAtTime(0.05, t + dur * 0.6);
+        g.gain.linearRampToValueAtTime(v, t + 0.02);
+        g.gain.setValueAtTime(v, t + dur * 0.85);
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        o.connect(g); g.connect(lp);
+        o.connect(g); g.connect(this.musicGain);
+        this._reverb(g, 0.1);
         o.start(t); o.stop(t + dur + 0.05);
       });
     }
@@ -468,11 +467,11 @@ window.TTK = window.TTK || {};
     _playBass(freq, t, dur) {
       const o = this.ctx.createOscillator();
       const g = this.ctx.createGain();
-      o.type = 'sine';
+      o.type = 'triangle';
       o.frequency.value = freq;
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(0.09, t + 0.04);
-      g.gain.setValueAtTime(0.09, t + dur * 0.7);
+      g.gain.linearRampToValueAtTime(0.15, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.05, t + dur * 0.5);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       o.connect(g); g.connect(this.musicGain);
       o.start(t); o.stop(t + dur + 0.05);
@@ -482,26 +481,39 @@ window.TTK = window.TTK || {};
       if (peak < 0.005) return;
       const o = this.ctx.createOscillator();
       const g = this.ctx.createGain();
-      o.type = 'sine';
+      o.type = 'square';
       o.frequency.value = freq;
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(peak, t + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      g.gain.linearRampToValueAtTime(peak, t + 0.006);
+      g.gain.setValueAtTime(peak * 0.6, t + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
       o.connect(g); g.connect(this.musicGain);
-      this._reverb(g, 0.5);
-      o.start(t); o.stop(t + 0.4);
+      this._reverb(g, 0.12);
+      o.start(t); o.stop(t + 0.2);
     }
 
     _playKick(t, amount) {
       const o = this.ctx.createOscillator();
       const g = this.ctx.createGain();
-      o.type = 'sine';
-      o.frequency.setValueAtTime(130, t);
-      o.frequency.exponentialRampToValueAtTime(48, t + 0.12);
+      o.type = 'square';
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(46, t + 0.1);
       g.gain.setValueAtTime(0.16 * amount, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
       o.connect(g); g.connect(this.musicGain);
-      o.start(t); o.stop(t + 0.28);
+      o.start(t); o.stop(t + 0.2);
+    }
+
+    _playHat(t, vol) {
+      const src = this._noise();
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 6500;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.06 * vol, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+      src.connect(hp); hp.connect(g); g.connect(this.musicGain);
+      src.start(t); src.stop(t + 0.06);
     }
 
     _ready() { return this.enabled && this.ctx && this._noiseBuffer; }

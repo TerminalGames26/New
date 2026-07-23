@@ -52,9 +52,9 @@ window.TTK = window.TTK || {};
   class Logo {
     constructor() {
       this.letters = [
-        { type: 'T', baseX: -0.94, tilt: 0 },
+        { type: 'T', baseX: -1.06, tilt: 0 },
         { type: 'T', baseX: 0.0, tilt: 0 },
-        { type: 'K', baseX: 0.92, tilt: 0 }
+        { type: 'K', baseX: 1.04, tilt: 0 }
       ];
       this.state = this.letters.map(() => ({
         ox: 0, oy: 0, scale: 1, scaleX: 1, scaleY: 1, alpha: 1, tilt: 0
