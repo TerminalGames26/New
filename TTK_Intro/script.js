@@ -407,6 +407,12 @@
 
     /* Persistent cracks radiating from each impact (no crater circle). */
     _drawCraters(ctx) {
+      if (!this.craters.length) return;
+      // Clip to the floor so cracks never extend above the floor line.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(-1e4, this.floorScreenY, 2e4, 1e4);
+      ctx.clip();
       for (const c of this.craters) {
         const gp = c.t;
         ctx.save();
@@ -429,6 +435,7 @@
         }
         ctx.restore();
       }
+      ctx.restore();   // release floor clip
     }
 
     /* Chunky, irregular dark rocks with a lit top edge + soft floor shadow. */
