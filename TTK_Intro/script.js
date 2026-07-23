@@ -196,8 +196,7 @@
       const h = md * 0.2;                                       // bigger letters
       this.logoH = h;
       this.floorScreenY = this.H * 0.64;                        // glossy floor line
-      this.sink = h * 0.12;                                     // letters embed a bit into the floor
-      this.logoCy = (this.floorScreenY - this.H / 2) - h * 0.45 + this.sink;
+      this.logoCy = (this.floorScreenY - this.H / 2) - h * 0.45; // base sits on the floor
       this.sceneAlpha = seg(time, 0, 1.5, util.easeOutCubic);
 
       // Gentle camera settle (slow push-in) + drift toward the moon.
@@ -363,16 +362,8 @@
       this._drawReflection(ctx);
 
       if (this.logoH) {
-        // Clip to above the floor so the embedded part of the letters is
-        // hidden "in the ground".
-        const floorWY = this.floorScreenY - this.H / 2;
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(-1e4, -1e4, 2e4, floorWY + 1e4);
-        ctx.clip();
         this.logo.draw(ctx, { cx: 0, cy: this.logoCy, height: this.logoH, alpha: this.sceneAlpha });
         this._drawShine(ctx);
-        ctx.restore();
       }
 
       this.particles.render(ctx);
