@@ -94,15 +94,13 @@ window.TTK = window.TTK || {};
       const segs = GEOMETRY[type];
       const W = h * 0.27;
 
-      // Polished chrome front face — reflective, with a bright mid band so
-      // it reads as clean glossy metal on the dark floor.
+      // Smooth metal front face — a clean top-lit gradient (no hard bands
+      // or highlight lines), so the letter reads as one solid 3D shape.
       const grad = ctx.createLinearGradient(0, -h * 0.5, 0, h * 0.5);
-      grad.addColorStop(0.00, '#e2e5e9');
-      grad.addColorStop(0.28, '#7f838b');
-      grad.addColorStop(0.48, '#cfd2d7');
-      grad.addColorStop(0.60, '#9a9ea5');
-      grad.addColorStop(0.80, '#4e5158');
-      grad.addColorStop(1.00, '#303339');
+      grad.addColorStop(0.00, '#dfe2e6');
+      grad.addColorStop(0.40, '#a5a9af');
+      grad.addColorStop(0.72, '#6b6f76');
+      grad.addColorStop(1.00, '#34373d');
 
       const stroke = (offx, offy, style, width) => {
         ctx.lineCap = 'round';
@@ -131,30 +129,19 @@ window.TTK = window.TTK || {};
       stroke(0, W * 0.14, 'rgba(0,0,0,0.55)', W);
       ctx.restore();
 
-      // 2. 3D extrusion — short diagonal lower-right bevel (dark metal sides)
-      const depth = W * 0.34, steps = 10;
-      const ex = 0.62, ey = 0.78, en = Math.hypot(ex, ey);
+      // 2. Deep 3D extrusion — a chunky diagonal lower-right bevel that
+      // reads as a solid extruded block (dark metal sides, shaded back).
+      const depth = W * 0.6, steps = 18;
+      const ex = 0.6, ey = 0.8, en = Math.hypot(ex, ey);
       for (let i = steps; i >= 1; i--) {
         const f = i / steps;
         const mag = depth * f;
-        const col = mix('#24262b', '#50535a', 1 - f);
+        const col = mix('#131418', '#494c53', 1 - f);
         stroke((ex / en) * mag, (ey / en) * mag, col, W);
       }
 
-      // 3. Chrome front face
+      // 3. Smooth metal front face (one clean gradient — no highlight lines)
       stroke(0, 0, grad, W);
-
-      // Crisp top-edge highlight (fades out below the top so the vertical
-      // strokes never get a full-length "white line").
-      const hiGrad = ctx.createLinearGradient(0, -h * 0.5, 0, -h * 0.06);
-      hiGrad.addColorStop(0, util.rgba('#ffffff', 0.85));
-      hiGrad.addColorStop(1, util.rgba('#ffffff', 0));
-
-      // 4. Thin bright rim along the very top edge only (clean, not a halo)
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      stroke(-W * 0.02, -W * 0.34, hiGrad, W * 0.1);
-      ctx.restore();
 
       ctx.restore();
     }

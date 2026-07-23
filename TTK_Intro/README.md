@@ -35,7 +35,7 @@ plain classic scripts (no ES modules) so there are no CORS issues.
 | ----- | ------------ |
 | **Floor** | A smooth fade reveals the glossy black floor with its reflective sheen and horizon edge. |
 | **Drops** | The three chrome-metal letters drop from above, one at a time at a steady pace, stretching as they accelerate. |
-| **Impact** | Each letter slams into the floor: a landing **boom**, a **dust puff**, a burst of **flying pebbles**, a **cracked crater** punched into the surface, an expanding shockwave ring, a squash-and-settle bounce and a camera shake. |
+| **Impact** | Each letter slams into the floor: a landing **boom**, a soft **dust cloud**, a burst of **chunky flying pebbles**, a **cracked crater** punched into the surface, a squash-and-settle bounce and a camera shake. |
 | **Logo** | TTK stands assembled on the floor (mirrored in the gloss); a metal shine sweeps across it. |
 | **Outro** | *“Join TTK Today / .gg/ttk”* fades in. |
 
@@ -69,9 +69,10 @@ global `TTK` namespace and the shared math/easing helpers (`TTK.util`).
   faded and blended into the floor, for the glossy mirror look.
 - **Craters:** each impact punches a persistent flattened crater with
   procedurally generated radial **cracks** into the floor.
-- **Pebbles:** each impact throws a burst of little dark rocks that fly out,
-  fall under gravity and **bounce** to rest on the floor (plus a light dust
-  puff from the particle system).
+- **Pebbles:** each impact throws a burst of chunky, irregular dark rocks
+  that fly out, fall under gravity and **bounce** to rest on the floor.
+- **Dust:** a soft grey cloud (rendered with normal, non-additive blending
+  so it settles realistically instead of flashing white).
 
 ### The letters (`logo.js`)
 Not text. Each letter is thick round-capped stroke segments rendered in

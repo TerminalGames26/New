@@ -315,6 +315,7 @@ window.TTK = window.TTK || {};
       this.twinkle = o.twinkle || 0;         // twinkle amount 0..1
       this.phase = Math.random() * TAU;
       this.trail = o.trail || false;
+      this.additive = o.additive == null ? true : o.additive; // 'lighter' vs normal blend
       this.mode = o.mode || 'free';          // free | orbit | homing
 
       // orbit params
@@ -429,11 +430,14 @@ window.TTK = window.TTK || {};
 
     render(ctx) {
       const S = SpriteFactory.SIZE;
-      ctx.globalCompositeOperation = 'lighter';
+      let cur = 'lighter';
+      ctx.globalCompositeOperation = cur;
       const live = this.live;
       for (let i = 0; i < live.length; i++) {
         const p = live[i];
         if (p._a <= 0.002) continue;
+        const comp = p.additive ? 'lighter' : 'source-over';
+        if (comp !== cur) { ctx.globalCompositeOperation = comp; cur = comp; }
         // Motion-blur streak for fast trailing particles.
         if (p.trail) {
           const dx = p.x - p.px, dy = p.y - p.py;
@@ -614,46 +618,37 @@ window.TTK = window.TTK || {};
       }
     }
 
-    // Moon-dust plume kicked up when a letter slams into the surface.
+    // A soft, realistic dust cloud kicked up when a letter hits the floor.
+    // Muted greys, soft + slow, so it reads as settling dust — not a flash.
     moonDust(x, y, power) {
       power = power || 1;
-      const greys = [PALETTE.dustLight, PALETTE.dustMid, PALETTE.dustDark, PALETTE.white];
-      // Upward / outward plume
-      const n = Math.floor(46 * power);
+      const greys = ['#4a4c52', '#5c5f66', '#6d7077', '#7e828a'];
+      // Billowing cloud that rises a little then settles
+      const n = Math.floor(34 * power);
       for (let i = 0; i < n; i++) {
-        const a = -Math.PI / 2 + util.rand(-1.15, 1.15);   // mostly up + out
-        const sp = util.rand(70, 430) * power;
+        const a = -Math.PI / 2 + util.rand(-1.25, 1.25);
+        const sp = util.rand(40, 260) * power;
         this.spawn({
-          type: util.pick(['dust', 'dust', 'glow', 'spark']),
+          type: 'dust',
           color: util.pick(greys),
-          x: x + util.rand(-16, 16), y: y + util.rand(-4, 4),
-          vx: Math.cos(a) * sp * 0.7, vy: Math.sin(a) * sp,
-          grav: util.rand(220, 420), drag: 0.86,
-          size: util.rand(7, 22), sizeEnd: util.rand(2, 9),
-          life: util.rand(0.7, 1.8), vr: util.rand(-4, 4), fadeOut: 0.62
+          x: x + util.rand(-18, 18), y: y + util.rand(-4, 4),
+          vx: Math.cos(a) * sp * 0.85, vy: Math.sin(a) * sp * 0.7,
+          grav: util.rand(30, 120), drag: 0.8,
+          size: util.rand(16, 42), sizeEnd: util.rand(20, 54),   // expands as it dissipates
+          life: util.rand(0.9, 1.9), alpha: util.rand(0.35, 0.6),
+          vr: util.rand(-1, 1), fadeIn: 0.1, fadeOut: 0.7, additive: false
         });
       }
-      // Low, wide ground sheet spreading sideways along the surface
-      const m = Math.floor(20 * power);
+      // Low ground-hugging dust spreading sideways
+      const m = Math.floor(16 * power);
       for (let i = 0; i < m; i++) {
         const dir = Math.random() < 0.5 ? -1 : 1;
         this.spawn({
           type: 'dust',
-          color: util.pick([PALETTE.dustMid, PALETTE.dustDark]),
-          x: x, y: y, vx: dir * util.rand(140, 460) * power, vy: util.rand(-50, 25),
-          grav: 160, drag: 0.9, size: util.rand(9, 24), sizeEnd: util.rand(3, 7),
-          life: util.rand(0.6, 1.4), fadeOut: 0.6
-        });
-      }
-      // A few heavier debris flecks
-      for (let i = 0; i < Math.floor(8 * power); i++) {
-        const a = -Math.PI / 2 + util.rand(-0.9, 0.9);
-        const sp = util.rand(200, 520) * power;
-        this.spawn({
-          type: 'glitter', color: util.pick([PALETTE.dustLight, PALETTE.dustDark]),
-          x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-          grav: 620, drag: 0.98, size: util.rand(4, 9), sizeEnd: 2,
-          life: util.rand(0.8, 1.6), vr: util.rand(-8, 8), trail: true, fadeOut: 0.5
+          color: util.pick(greys),
+          x: x, y: y, vx: dir * util.rand(120, 380) * power, vy: util.rand(-30, 10),
+          grav: 60, drag: 0.86, size: util.rand(18, 40), sizeEnd: util.rand(24, 50),
+          life: util.rand(0.7, 1.4), alpha: util.rand(0.3, 0.5), fadeOut: 0.7, additive: false
         });
       }
     }

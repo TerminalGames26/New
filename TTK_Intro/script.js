@@ -66,7 +66,6 @@
       this._cues = {};
       this._last = 0;
 
-      this.shocks = [];      // expanding collision shockwaves
       this.craters = [];     // persistent cracked craters on the floor
       this.pebbles = [];     // flying debris rocks
 
@@ -155,7 +154,6 @@
       this._cues = {};
       this.finished = false;
       this.particles.clear();
-      this.shocks = [];
       this.craters = [];
       this.pebbles = [];
       this.logo.resetHidden();
@@ -195,9 +193,9 @@
       const md = this.minDim;
 
       // ---- geometry ----
-      const h = md * 0.14;
+      const h = md * 0.2;                                       // bigger letters
       this.logoH = h;
-      this.floorScreenY = this.H * 0.66;                        // glossy floor line
+      this.floorScreenY = this.H * 0.64;                        // glossy floor line
       this.logoCy = (this.floorScreenY - this.H / 2) - h * 0.45; // base rests on floor
       this.sceneAlpha = seg(time, 0, 1.5, util.easeOutCubic);
 
@@ -235,13 +233,11 @@
           const lyWorld = this.logoCy + h * 0.45;             // base = floor (world)
           const lxScreen = this.W / 2 + lxWorld * this.cam.zoom;
           const lyScreen = this.floorScreenY;
-          this.particles.moonDust(lxWorld, lyWorld, 1.1);     // light dust puff
-          this.shocks.push({ x: lxWorld, y: lyWorld, t: 0 }); // shockwave (world)
+          this.particles.moonDust(lxWorld, lyWorld, 1.2);     // soft dust cloud
           this._spawnCrater(lxScreen, lyScreen, h * this.cam.zoom);
-          this._spawnPebbles(lxScreen, lyScreen);
-          this.audio.boom(1.15);
-          this.audio.sparkle();
-          this.cam.shake = 1.0;
+          this._spawnPebbles(lxScreen, lyScreen, h * this.cam.zoom);
+          this.audio.boom(1.2);
+          this.cam.shake = 1.1;
         }
       }
 
@@ -253,7 +249,7 @@
       // metal shine sweep flag (used in render)
       this.shineP = seg(time, T.shine, 0.9, util.easeInOutCubic);
 
-      this.bloomStrength = util.lerp(0.12, 0.2, this.sceneAlpha);
+      this.bloomStrength = util.lerp(0.08, 0.14, this.sceneAlpha);
 
       // Music intensity: quiet + moody, small lift once the logo is up.
       let mi = 0.28;
@@ -261,11 +257,6 @@
       if (time > T.textIn) mi = 0.42;
       this.audio.setMusicIntensity(mi);
 
-      // Advance / retire collision shockwaves.
-      for (let i = this.shocks.length - 1; i >= 0; i--) {
-        this.shocks[i].t += dt;
-        if (this.shocks[i].t > 1.0) this.shocks.splice(i, 1);
-      }
       // grow-in for craters
       for (const c of this.craters) if (c.t < 1) c.t = Math.min(1, c.t + dt / 0.4);
       // pebble physics (bounce on the floor, settle)
@@ -297,18 +288,24 @@
       this.craters.push({ x: x, y: y, r: r, cracks: cracks, t: 0 });
     }
 
-    /* Throw a burst of pebbles/debris out of the impact. */
-    _spawnPebbles(x, y) {
-      const n = 16 + (Math.random() * 6 | 0);
+    /* Throw a burst of chunky, irregular pebbles out of the impact. */
+    _spawnPebbles(x, y, ref) {
+      const n = 22 + (Math.random() * 8 | 0);
       for (let i = 0; i < n; i++) {
-        const a = -Math.PI / 2 + util.rand(-1.15, 1.15);
-        const sp = util.rand(120, 540);
+        const a = -Math.PI / 2 + util.rand(-1.2, 1.2);
+        const sp = util.rand(140, 640);
+        const big = Math.random() < 0.25;                 // a few larger chunks
+        const size = ref * (big ? util.rand(0.05, 0.09) : util.rand(0.018, 0.045));
+        // irregular rock outline (per-vertex radii)
+        const vn = 5 + (Math.random() * 3 | 0);
+        const verts = [];
+        for (let k = 0; k < vn; k++) verts.push(0.7 + Math.random() * 0.5);
         this.pebbles.push({
-          x: x, y: y,
-          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - util.rand(40, 160),
-          rot: util.rand(0, TAU), vr: util.rand(-12, 12),
-          size: util.rand(2.5, 8), shade: util.rand(0.14, 0.4),
-          floor: y, bounces: 0, life: util.rand(1.4, 2.6), rest: false
+          x: x + util.rand(-6, 6), y: y,
+          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - util.rand(60, 220),
+          rot: util.rand(0, TAU), vr: util.rand(-14, 14),
+          size: size, shade: util.rand(0.12, 0.34), verts: verts,
+          floor: y, bounces: 0, life: util.rand(1.6, 3.0), rest: false
         });
       }
     }
@@ -363,7 +360,6 @@
       ctx.translate(-this.cam.x, -this.cam.y);
 
       this._drawReflection(ctx);
-      this._drawShocks(ctx);
 
       if (this.logoH) {
         this.logo.draw(ctx, { cx: 0, cy: this.logoCy, height: this.logoH, alpha: this.sceneAlpha });
@@ -444,64 +440,44 @@
       }
     }
 
-    /* Small dark rocks with a lit top edge + soft floor shadow. */
+    /* Chunky, irregular dark rocks with a lit top edge + soft floor shadow. */
     _drawPebbles(ctx) {
       for (const p of this.pebbles) {
         const a = util.clamp(p.life, 0, 1);
         const g = (p.shade * 255) | 0;
+        const vn = p.verts.length;
         // soft contact shadow when near the floor
         if (p.y >= p.floor - p.size * 2) {
-          ctx.fillStyle = 'rgba(0,0,0,' + (0.35 * a) + ')';
+          ctx.fillStyle = 'rgba(0,0,0,' + (0.4 * a) + ')';
           ctx.beginPath();
-          ctx.ellipse(p.x, p.floor + 1, p.size * 1.6, p.size * 0.5, 0, 0, TAU);
+          ctx.ellipse(p.x, p.floor + 1, p.size * 1.7, p.size * 0.5, 0, 0, TAU);
           ctx.fill();
         }
         ctx.save();
         ctx.globalAlpha = a;
         ctx.translate(p.x, p.y);
         ctx.rotate(p.rot);
+        // irregular rock body
         ctx.fillStyle = 'rgb(' + g + ',' + (g + 2) + ',' + (g + 6) + ')';
         ctx.beginPath();
-        ctx.ellipse(0, 0, p.size, p.size * 0.8, 0, 0, TAU);
+        for (let k = 0; k < vn; k++) {
+          const ang = (k / vn) * TAU;
+          const rr = p.size * p.verts[k];
+          const vx = Math.cos(ang) * rr, vy = Math.sin(ang) * rr;
+          k === 0 ? ctx.moveTo(vx, vy) : ctx.lineTo(vx, vy);
+        }
+        ctx.closePath();
         ctx.fill();
-        // lit top edge
-        ctx.fillStyle = 'rgba(190,198,214,0.6)';
+        // lit top-left facet
+        ctx.fillStyle = 'rgba(175,182,196,0.55)';
         ctx.beginPath();
-        ctx.ellipse(-p.size * 0.2, -p.size * 0.3, p.size * 0.4, p.size * 0.22, -0.5, 0, TAU);
+        ctx.ellipse(-p.size * 0.25, -p.size * 0.3, p.size * 0.45, p.size * 0.28, -0.5, 0, TAU);
         ctx.fill();
         ctx.restore();
       }
       ctx.globalAlpha = 1;
     }
 
-    /* Expanding collision shockwaves — flattened rings that ripple out
-       across the moon surface from each impact point. */
-    _drawShocks(ctx) {
-      if (!this.shocks.length) return;
-      const h = this.logoH;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      for (const s of this.shocks) {
-        const a = util.clamp(s.t / 0.95, 0, 1);
-        if (a >= 1) continue;
-        const fade = 1 - a;
-        const r = util.lerp(h * 0.2, h * 3.4, util.easeOutCubic(a));
-        // outer ring
-        ctx.lineWidth = h * 0.07 * fade + 1;
-        ctx.strokeStyle = 'rgba(224,228,238,' + (0.55 * fade) + ')';
-        ctx.beginPath();
-        ctx.ellipse(s.x, s.y, r, r * 0.34, 0, 0, TAU);
-        ctx.stroke();
-        // inner ring
-        const r2 = r * 0.58;
-        ctx.lineWidth = h * 0.05 * fade + 1;
-        ctx.strokeStyle = 'rgba(200,208,224,' + (0.4 * fade) + ')';
-        ctx.beginPath();
-        ctx.ellipse(s.x, s.y, r2, r2 * 0.34, 0, 0, TAU);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
 
     /* A bright metal shine that sweeps across the finished logo once. */
     _drawShine(ctx) {
