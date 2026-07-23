@@ -129,9 +129,9 @@ window.TTK = window.TTK || {};
       stroke(0, W * 0.14, 'rgba(0,0,0,0.55)', W);
       ctx.restore();
 
-      // 2. Deep 3D extrusion — a chunky diagonal lower-right bevel that
-      // reads as a solid extruded block (dark metal sides, shaded back).
-      const depth = W * 0.6, steps = 18;
+      // 2. 3D extrusion — a modest diagonal lower-right bevel (enough depth
+      // to read as solid metal, without bulging out in front).
+      const depth = W * 0.28, steps = 12;
       const ex = 0.6, ey = 0.8, en = Math.hypot(ex, ey);
       for (let i = steps; i >= 1; i--) {
         const f = i / steps;
